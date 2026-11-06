@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#f0f8ff"><title>关于 · suakitsu</title><meta name="description" content="suakitsu 的个人博客，记录想法、项目与日常。"><link rel="canonical" href="https://suakitsu.github.io/about.html"><link rel="icon" href="/favicon.png" type="image/png"><meta property="og:title" content="关于 · suakitsu"><meta property="og:description" content="记录想法、项目与日常。"><meta property="og:url" content="https://suakitsu.github.io/about.html"><meta property="og:type" content="website"><meta property="og:image" content="https://suakitsu.github.io/avatar.png"><script>(() => { try {
+  const saved = localStorage.getItem('suakitsu-theme');
+  document.documentElement.dataset.theme = saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const home = location.pathname === '/' || location.pathname === '/index.html';
+  const force = new URLSearchParams(location.search).get('intro') === '1';
+  if (home && !matchMedia('(prefers-reduced-motion: reduce)').matches && (!localStorage.getItem('suakitsu_intro_seen_v1') || force)) {
+    document.documentElement.classList.add('swarm-intro-preparing');
+    setTimeout(() => document.documentElement.classList.remove('swarm-intro-preparing'), 3500);
+  }
+} catch {} })();</script><link rel="stylesheet" href="/style.css"><script src="/main.js" defer></script></head>
+<body><div id="pageStart" aria-hidden="true" style="height:1px;position:absolute;top:0"></div><div class="skip-links"><a href="#main">跳到主要内容</a></div><nav class="navbar" id="site-nav" aria-label="主导航">
+  <div class="container">
+    <a href="/" class="logo">
+      <span class="logo-icon">🏠</span>
+      <span class="logo-text">suakitsu</span>
+    </a>
+    
+    <div class="nav-right">
+      <div class="nav-links">
+        <a href="/" class="nav-link">首页</a>
+        <a href="/categories.html" class="nav-link">分类</a>
+        <a href="/tags.html" class="nav-link">标签</a>
+        <a href="/year-archive.html" class="nav-link">归档</a>
+        <a href="/about.html" class="nav-link active" aria-current="page">关于</a>
+        <a href="https://github.com/suakitsu" target="_blank" rel="noopener" class="nav-link">GitHub</a>
+      </div>
+      
+      <button class="swarm-replay-toggle" id="swarmReplayBtn" aria-label="重播页面构建动效" title="重播页面构建动效">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/>
+          <path d="M5 3v4"/><path d="M3 5h4"/>
+        </svg>
+      </button>
+
+      <button class="search-toggle" id="searchToggle" aria-label="搜索">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="m21 21-4.35-4.35"/>
+        </svg>
+      </button>
+      
+      <button class="theme-toggle" id="themeToggle" aria-label="切换主题" aria-pressed="false">
+        <span class="icon-moon">🌙</span>
+        <span class="icon-sun">☀️</span>
+      </button>
+      
+      <button class="menu-toggle" id="menuToggle" aria-label="菜单" aria-controls="mobileMenu" aria-expanded="false">
+        ☰
+      </button>
+    </div>
+  </div>
+</nav>
+
+
+<div class="mobile-overlay" id="mobileOverlay"></div>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="/" class="mobile-link">🏠 首页</a>
+  <a href="/categories.html" class="mobile-link">📁 分类</a>
+  <a href="/tags.html" class="mobile-link">🏷️ 标签</a>
+  <a href="/year-archive.html" class="mobile-link">📅 归档</a>
+  <a href="/about.html" class="mobile-link">👋 关于</a>
+  <a href="https://github.com/suakitsu" target="_blank" rel="noopener" class="mobile-link">🐙 GitHub</a>
+</div>
+<main id="main" class="main-content"><section class="content-page"><div class="container"><h1>关于</h1><p class="page-intro">你好，我是 suakitsu。</p><div class="about-panel"><div class="profile-card-main"><div class="avatar-wrapper"><img src="/avatar.png" width="80" height="80" alt="suakitsu"></div><div><h2>suakitsu</h2><span class="avatar-role">个人博客</span></div></div><p>这里将记录我的想法、项目与日常。</p><p>小站刚刚开始，文章会慢慢更新。</p><a class="about-link" href="https://github.com/suakitsu" target="_blank" rel="noopener">在 GitHub 找到我 →</a></div></div></section></main><footer class="footer" id="footer"><div class="container"><div class="footer-content"><div class="footer-info"><p class="footer-title">suakitsu 的个人博客</p><p class="footer-subtitle">想法、项目与日常，慢慢记录。</p></div><div class="footer-links"><a href="https://github.com/suakitsu" target="_blank" rel="noopener">GitHub</a><a href="/about.html">关于</a></div><div class="footer-stats">0 篇文章 · 0 个分类</div><div class="footer-copyright"><p>© 2026 suakitsu</p></div></div></div></footer><dialog class="search-modal" id="searchModal" aria-labelledby="searchTitle"><div class="search-modal-overlay" id="searchOverlay" aria-hidden="true"></div><div class="search-modal-content"><h2 class="sr-only" id="searchTitle">搜索文章</h2><div class="search-modal-header"><input type="search" class="search-input" id="searchInput" placeholder="搜索文章..." aria-label="搜索文章关键词" autocomplete="off"><button class="search-close" id="searchClose" aria-label="关闭搜索"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18m0-12 12 12"/></svg></button></div><div class="search-results search-hint" id="searchResults" role="status">还没有文章，发布后就能在这里搜索。</div></div></dialog><button class="back-to-top" id="backToTop" aria-label="返回顶部"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg></button></body></html>
