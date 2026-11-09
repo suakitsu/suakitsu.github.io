@@ -1107,6 +1107,38 @@
   };
 
 
+  async function syncGithubProjectCount() {
+    const counter = document.getElementById('githubProjectCount');
+    if (!counter) return;
+    const cacheKey = 'suakitsu_public_repos_v1';
+    const cacheLifetime = 60 * 60 * 1000;
+    const validCount = value => Number.isSafeInteger(value) && value >= 0;
+    try {
+      const cached = JSON.parse(Storage.get(cacheKey));
+      if (cached && validCount(cached.count) && Number.isFinite(cached.updatedAt)) {
+        counter.textContent = String(cached.count);
+        const age = Date.now() - cached.updatedAt;
+        if (age >= 0 && age < cacheLifetime) return;
+      }
+    } catch { /* Ignore unavailable or invalid storage. */ }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch('https://api.github.com/users/suakitsu', {
+        signal: controller.signal,
+        credentials: 'omit',
+        referrerPolicy: 'no-referrer'
+      });
+      if (!response.ok) return;
+      const profile = await response.json();
+      if (profile.login !== 'suakitsu' || !validCount(profile.public_repos)) return;
+      counter.textContent = String(profile.public_repos);
+      Storage.set(cacheKey, JSON.stringify({ count: profile.public_repos, updatedAt: Date.now() }));
+    } catch { /* Keep the cached or published count when GitHub is unavailable. */ }
+    finally { clearTimeout(timeout); }
+  }
+
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   function initControls() {
     const themeButton = document.getElementById('themeToggle');
@@ -1181,5 +1213,6 @@
   document.addEventListener('DOMContentLoaded', () => {
     initControls();
     SwarmIntroManager.init();
+    syncGithubProjectCount();
   });
 })();
