@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#f0f8ff"><title>默认信任 A，审核回写 B：用 Go + Fyne 写一个克制的目录树同步工具 WayFileSync · suakitsu</title><meta name="description" content="通用同步工具功能强大，但在父子工作目录场景下很容易误覆盖。WayFileSync 把规则收敛为一件事：父目录 A 变更自动同步到 B，子目录 B 的修改必须先看 Unified Diff 审核后再回写。"><link rel="canonical" href="https://suakitsu.github.io/posts/wayfilesync.html"><link rel="icon" href="/favicon.png" type="image/png"><meta property="og:title" content="默认信任 A，审核回写 B：用 Go + Fyne 写一个克制的目录树同步工具 WayFileSync · suakitsu"><meta property="og:description" content="通用同步工具功能强大，但在父子工作目录场景下很容易误覆盖。WayFileSync 把规则收敛为一件事：父目录 A 变更自动同步到 B，子目录 B 的修改必须先看 Unified Diff 审核后再回写。"><meta property="og:url" content="https://suakitsu.github.io/posts/wayfilesync.html"><meta property="og:type" content="website"><meta property="og:image" content="https://suakitsu.github.io/avatar.png"><script>(() => { try {
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#f0f8ff"><title>默认信任 A，审核回写 B：用 Go + Fyne 写一个克制的目录树同步工具 WayFileSync · suakitsu</title><meta name="description" content="为什么在有了 FreeFileSync 和 Syncthing 之后还要自己写一个桌面同步器？本文拆解 WayFileSync 的非对称同步哲学与 Go 核心实现：防嵌套拓扑校验、fsnotify 自写回声抑制、基于文件签名的重命名识别，以及 Myers Unified Diff 审核回写机制。"><link rel="canonical" href="https://suakitsu.github.io/posts/wayfilesync.html"><link rel="icon" href="/favicon.png" type="image/png"><meta property="og:title" content="默认信任 A，审核回写 B：用 Go + Fyne 写一个克制的目录树同步工具 WayFileSync · suakitsu"><meta property="og:description" content="为什么在有了 FreeFileSync 和 Syncthing 之后还要自己写一个桌面同步器？本文拆解 WayFileSync 的非对称同步哲学与 Go 核心实现：防嵌套拓扑校验、fsnotify 自写回声抑制、基于文件签名的重命名识别，以及 Myers Unified Diff 审核回写机制。"><meta property="og:url" content="https://suakitsu.github.io/posts/wayfilesync.html"><meta property="og:type" content="website"><meta property="og:image" content="https://suakitsu.github.io/avatar.png"><script>(() => { try {
   const saved = localStorage.getItem('suakitsu-theme');
   document.documentElement.dataset.theme = saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 } catch {} })();</script><link rel="stylesheet" href="/style.css"><script src="/main.js" defer></script></head>
@@ -55,27 +55,148 @@
   <a href="/about.html" class="mobile-link">关于</a>
   <a href="https://github.com/suakitsu" target="_blank" rel="noopener" class="mobile-link">GitHub</a>
 </div>
-<main id="main" class="main-content"><div class="reading-progress-bar" id="readingProgressBar" aria-hidden="true"></div><article class="post-article-section"><div class="container"><nav class="breadcrumb" aria-label="面包屑导航"><a href="/">首页</a><span class="separator">/</span><a href="/categories.html#cat-%E9%A1%B9%E7%9B%AE%E8%AE%B0%E5%BD%95">项目记录</a><span class="separator">/</span><span class="current">默认信任 A，审核回写 B：用 Go + Fyne 写一个克制的目录树同步工具 WayFileSync</span></nav><header class="post-header"><div class="post-meta"><a href="/categories.html#cat-%E9%A1%B9%E7%9B%AE%E8%AE%B0%E5%BD%95" class="post-category">项目记录</a><time datetime="2026-11-12">2026-11-12</time><span class="read-time">约 4 分钟阅读</span><a href="https://github.com/suakitsu/WayFileSync" target="_blank" rel="noopener" class="post-repo-link">GitHub 仓库 ↗</a></div><h1 class="post-title">默认信任 A，审核回写 B：用 Go + Fyne 写一个克制的目录树同步工具 WayFileSync</h1><p class="post-excerpt">通用同步工具功能强大，但在父子工作目录场景下很容易误覆盖。WayFileSync 把规则收敛为一件事：父目录 A 变更自动同步到 B，子目录 B 的修改必须先看 Unified Diff 审核后再回写。</p></header><div class="toc-mobile"><button type="button" class="toc-mobile-toggle" id="tocMobileToggle" aria-expanded="false"><span>文章目录</span><span class="toc-toggle-icon">▼</span></button><nav class="toc-mobile-nav" id="tocMobileNav" aria-label="移动端文章目录"><a href="#section-1" class="toc-link">核心设计哲学：Default-Trust A, Review B</a><a href="#section-2" class="toc-link">树状同步拓扑与防环校验</a><a href="#section-3" class="toc-link">用 Go + Fyne 构建原生 Windows 桌面工具的体感</a></nav></div><div class="post-content-wrapper"><div class="post-content"><p>市面上并不缺文件同步工具：FreeFileSync、Syncthing、rsync 都很成熟。但在我自己的工作流里，经常遇到一种非对称的目录同步需求——<strong>主目录 <code>A</code> 是经过整理的基准仓库，派生工作目录 <code>B</code>（比如交给实验脚本、AI Agent 或外部工具处理的沙盒副本）需要时刻跟进 <code>A</code> 的更新，但 <code>B</code> 里面产生的修改绝不能未经检查就自动覆盖回 <code>A</code>。</strong></p>
-<p>如果用传统双向同步，一旦 <code>B</code> 里的脚本改坏了文件，错误会立刻污染基准目录 <code>A</code>；如果每次手动比对整个目录树，在多层级子目录下又极其繁琐。于是我用 Go 和 Fyne 写了 <a href="https://github.com/suakitsu/WayFileSync" target="_blank" rel="noopener">WayFileSync</a>。</p>
-<h2 id="section-1">核心设计哲学：Default-Trust A, Review B</h2>
-<p>WayFileSync 故意砍掉了通用同步工具里复杂的双向冲突合并策略，只保留一条清晰的单向信任 + 审核回写规则：</p>
-<ol><li><strong>下行自动同步（<code>A -&gt; B</code>）</strong>：父节点 <code>A</code> 是受信任的基准源，<code>A</code> 中的新增与修改会自动同步到子节点 <code>B</code>；</li><li><strong>上行强制审核（<code>B -&gt; A</code>）</strong>：子节点 <code>B</code> 中发生的文件变更不会自动覆盖 <code>A</code>，而是进入待审核队列（Pending Review）；</li><li><strong>Unified Diff 逐项确认</strong>：在 GUI 界面中直接查看文本文件的 Unified Diff 差异对比，确认无误后才回写到 <code>A</code>，或者一键用 <code>A</code> 重置 <code>B</code>。</li></ol>
-<div class="code-block-wrapper"><div class="code-block-header"><div class="code-block-dots"><span class="code-block-dot"></span><span class="code-block-dot"></span><span class="code-block-dot"></span></div><span class="code-block-lang">TEXT</span></div><button class="code-copy-btn" type="button" aria-label="复制代码"><span class="copy-text">复制</span></button><pre class="highlight"><code>[ 基准父目录 A ] ──── 自动下行同步 (Auto Sync) ────▶ [ 派生子目录 B ]
-       ▲                                                    │
-       └──── 人工查看 Unified Diff 审核通过后回写 ──────────┘</code></pre></div>
-<h2 id="section-2">树状同步拓扑与防环校验</h2>
-<p>除了单对 <code>A -&gt; B</code> 目录外，有时一个基准目录会派生出多个子目录，甚至形成两层派生树（<code>A -&gt; B -&gt; C</code>）。WayFileSync 使用 <code>sync_tree.json</code> 来维护目录树拓扑，并在添加节点时执行两项严格的静态安全检查：</p>
-<ul><li><strong>环路检测（Cycle Prevention）</strong>：禁止任何节点直接或间接将自己的祖先节点设为下游；</li><li><strong>父子目录嵌套拦截（Containment Check）</strong>：严禁将 <code>C:\Work\Project</code> 与它的子文件夹 <code>C:\Work\Project\sub</code> 绑定为同步对，从根源上杜绝递归无限复制。</li></ul>
-<div class="code-block-wrapper"><div class="code-block-header"><div class="code-block-dots"><span class="code-block-dot"></span><span class="code-block-dot"></span><span class="code-block-dot"></span></div><span class="code-block-lang">JSON</span></div><button class="code-copy-btn" type="button" aria-label="复制代码"><span class="copy-text">复制</span></button><pre class="highlight"><code>{
-  &quot;nodes&quot;: [
-    {
-      &quot;id&quot;: &quot;root-workspace&quot;,
-      &quot;path&quot;: &quot;C:/Workspace/BaseRepo&quot;,
-      &quot;children&quot;: [&quot;sandbox-agent-a&quot;, &quot;sandbox-agent-b&quot;]
-    }
-  ]
+<main id="main" class="main-content"><div class="reading-progress-bar" id="readingProgressBar" aria-hidden="true"></div><article class="post-article-section"><div class="container"><nav class="breadcrumb" aria-label="面包屑导航"><a href="/">首页</a><span class="separator">/</span><a href="/categories.html#cat-%E9%A1%B9%E7%9B%AE%E8%AE%B0%E5%BD%95">项目记录</a><span class="separator">/</span><span class="current">默认信任 A，审核回写 B：用 Go + Fyne 写一个克制的目录树同步工具 WayFileSync</span></nav><header class="post-header"><div class="post-meta"><a href="/categories.html#cat-%E9%A1%B9%E7%9B%AE%E8%AE%B0%E5%BD%95" class="post-category">项目记录</a><time datetime="2026-11-12">2026-11-12</time><span class="read-time">约 12 分钟阅读</span><a href="https://github.com/suakitsu/WayFileSync" target="_blank" rel="noopener" class="post-repo-link">GitHub 仓库 ↗</a></div><h1 class="post-title">默认信任 A，审核回写 B：用 Go + Fyne 写一个克制的目录树同步工具 WayFileSync</h1><p class="post-excerpt">为什么在有了 FreeFileSync 和 Syncthing 之后还要自己写一个桌面同步器？本文拆解 WayFileSync 的非对称同步哲学与 Go 核心实现：防嵌套拓扑校验、fsnotify 自写回声抑制、基于文件签名的重命名识别，以及 Myers Unified Diff 审核回写机制。</p></header><div class="toc-mobile"><button type="button" class="toc-mobile-toggle" id="tocMobileToggle" aria-expanded="false"><span>文章目录</span><span class="toc-toggle-icon">▼</span></button><nav class="toc-mobile-nav" id="tocMobileNav" aria-label="移动端文章目录"><a href="#section-1" class="toc-link">一、为什么通用同步工具在这个场景下“太重又太危险”</a><a href="#section-2" class="toc-link">二、深入 Go 核心实现：四个关键工程细节</a><a href="#section-3" class="toc-link toc-h3">1. 树状拓扑校验与防嵌套死循环（sameOrNested）</a><a href="#section-4" class="toc-link toc-h3">2. 父目录自动下发时的“待审核路径保护”（Pending Exclusion）</a><a href="#section-5" class="toc-link toc-h3">3. fsnotify 自写回声抑制（Internal Write Suppression）</a><a href="#section-6" class="toc-link toc-h3">4. 重命名智能识别（detectRenames）、Myers Diff 预览与写前自动备份</a><a href="#section-7" class="toc-link">三、交互打磨与 Windows 单文件打包</a><a href="#section-8" class="toc-link">四、小结</a></nav></div><div class="post-content-wrapper"><div class="post-content"><p>在日常开发与多 Agent 协作的工作流里，我经常需要维护这样一种目录结构：</p>
+<blockquote><p>我有一个主工作目录 <strong>A</strong>（干净的基准代码库），以及一个或多个从 <strong>A</strong> 派生出来的副本目录 <strong>B</strong>（比如交给自动化脚本、AI 编码助手或实验分支折腾的沙盒目录）。 - 当我在主目录 <strong>A</strong> 修改了代码时，我希望所有副本目录 <strong>B</strong> 能<strong>自动、实时地跟着更新</strong>； - 但当副本目录 <strong>B</strong> 里的脚本或 Agent 修改、删除了文件时，<strong>绝不能自动覆盖回主目录 A</strong>，必须先进入一个待审核列表，让我看一眼 Unified Diff 差异对比、勾选确认之后，才允许回写到 <strong>A</strong>。</p></blockquote>
+<p>为了这个看似简单却极其高频的场景，我试过市面上几乎所有主流的文件同步工具（FreeFileSync、Syncthing、rsync 脚本），最后决定用 <strong>Go + Fyne</strong> 自己写一个足够克制的原生桌面工具 —— <a href="https://github.com/suakitsu/WayFileSync" target="_blank" rel="noopener">WayFileSync</a>。</p>
+<h2 id="section-1">一、为什么通用同步工具在这个场景下“太重又太危险”</h2>
+<p>FreeFileSync 和 Syncthing 都是非常优秀的开源软件，它们也给了我很多启发：FreeFileSync 的“对比 $\rightarrow$ 预览 $\rightarrow$ 确认”流程非常清晰，而 Syncthing 的 <code>fsnotify</code> 实时目录监听与多节点拓扑很实用。</p>
+<p>但问题在于：<strong>通用同步工具默认把两边当作地位对等的节点（Peer-to-Peer）或纯粹的单向镜像（Mirror）</strong>。</p>
+<ul><li>如果配成<strong>双向实时同步</strong>：一旦副本目录 <code>B</code> 里的实验脚本跑飞了、误删了文件或改乱了配置，毫秒级的实时同步会立刻把灾难同步回主目录 <code>A</code>；</li><li>如果配成<strong>纯单向镜像（<code>A -&gt; B</code>）</strong>：当 <code>B</code> 里面产出了有价值的修改，你想把其中 3 个文件挑出来合回 <code>A</code> 时，单向镜像没有反向的 Diff 审核与勾选提交流程，甚至下一次 <code>A</code> 触发同步时还会把你在 <code>B</code> 里还没来得及拷走的新代码直接抹掉！</li></ul>
+<p>所以，WayFileSync 的核心设计哲学只有一句话：<strong>默认信任父目录 A，谨慎审核子目录 B（Default-Trust A, Review B）</strong>。</p>
+<div class="code-block-wrapper"><div class="code-block-header"><div class="code-block-dots"><span class="code-block-dot"></span><span class="code-block-dot"></span><span class="code-block-dot"></span></div><span class="code-block-lang">TEXT</span></div><button class="code-copy-btn" type="button" aria-label="复制代码"><span class="copy-text">复制</span></button><pre class="highlight"><code>                  ┌────────────────────────┐
+                  │   基准根目录 Root (A)   │
+                  └───────────┬────────────┘
+                              │
+        ┌─────────────────────┴─────────────────────┐
+        │ 1. A 修改时：自动下行同步 (跳过 B 待审核文件) │
+        ▼                                           ▼
+┌───────────────────┐                       ┌───────────────────┐
+│  派生副本 Copy 1   │ ── 3. 同级手动对比 ──▶ │  派生副本 Copy 2   │
+└─────────┬─────────┘                       └───────────────────┘
+          │
+          │ 2. B 修改时：拦截进入 Pending 队列
+          │    人工预览 Myers Unified Diff 并勾选确认后，备份并回写至 A
+          ▼
+  [ 待审核变更列表 ]</code></pre></div>
+<h2 id="section-2">二、深入 Go 核心实现：四个关键工程细节</h2>
+<p>虽然 WayFileSync 的界面和交互做得很轻，但在底层文件同步引擎（<code>internal/model</code>、<code>internal/sync</code>、<code>internal/watcher</code>）里，要保证“绝不丢文件、绝不死循环”需要处理好四个非常具体的技术细节。</p>
+<h3 id="section-3">1. 树状拓扑校验与防嵌套死循环（<code>sameOrNested</code>）</h3>
+<p>WayFileSync 支持在 <code>sync_tree.json</code> 中定义任意多层级的父子目录树（例如 <code>root -&gt; copy1 -&gt; copy1-child</code>）。但用户在通过文件选择框或拖拽绑定目录时，最容易犯的一个致命错误是：<strong>把子文件夹建在了父文件夹内部</strong>（例如把 <code>D:/ERP/main</code> 设为 A，把 <code>D:/ERP/main/backup</code> 设为 B）。</p>
+<p>一旦允许包含关系的两个目录建立同步，第一次同步就会把 <code>backup</code> 拷进 <code>backup/backup</code>，瞬间触发无限递归的目录爆炸。</p>
+<p>为此，<code>internal/model/config.go</code> 在加载和保存配置时，都会对所有节点两两执行基于 <code>filepath.Rel</code> 的相对路径包含检测：</p>
+<div class="code-block-wrapper"><div class="code-block-header"><div class="code-block-dots"><span class="code-block-dot"></span><span class="code-block-dot"></span><span class="code-block-dot"></span></div><span class="code-block-lang">GO</span></div><button class="code-copy-btn" type="button" aria-label="复制代码"><span class="copy-text">复制</span></button><pre class="highlight"><code>func (c *Config) Validate() error {
+	seen := map[string]bool{}
+	for _, n := range c.Nodes {
+		if seen[n.ID] {
+			return fmt.Errorf(&quot;duplicate node id %q&quot;, n.ID)
+		}
+		seen[n.ID] = true
+	}
+	for _, n := range c.Nodes {
+		if n.Parent != &quot;&quot; &amp;&amp; !seen[n.Parent] {
+			return fmt.Errorf(&quot;node %q has missing parent %q&quot;, n.ID, n.Parent)
+		}
+	}
+	for i := range c.Nodes {
+		for j := i + 1; j &lt; len(c.Nodes); j++ {
+			a, err := filepath.Abs(c.Nodes[i].Path)
+			if err != nil {
+				return err
+			}
+			b, err := filepath.Abs(c.Nodes[j].Path)
+			if err != nil {
+				return err
+			}
+			if sameOrNested(a, b) {
+				return fmt.Errorf(
+					&quot;不能选择彼此包含的文件夹：%q 和 %q；请选择两个独立目录，避免同步循环&quot;,
+					c.Nodes[i].ID, c.Nodes[j].ID,
+				)
+			}
+		}
+	}
+	return nil
+}
+
+func sameOrNested(a, b string) bool {
+	a = filepath.Clean(a)
+	b = filepath.Clean(b)
+	if a == b {
+		return true
+	}
+	rel, err := filepath.Rel(a, b)
+	if err == nil &amp;&amp; rel != &quot;.&quot; &amp;&amp; !startsDotDot(rel) {
+		return true
+	}
+	rel, err = filepath.Rel(b, a)
+	return err == nil &amp;&amp; rel != &quot;.&quot; &amp;&amp; !startsDotDot(rel)
 }</code></pre></div>
-<h2 id="section-3">用 Go + Fyne 构建原生 Windows 桌面工具的体感</h2>
-<p>选择 <strong>Go + Fyne</strong> 来写这个桌面小工具，主要是看中了它的单文件分发能力：</p>
-<ul><li>通过 CGO + MinGW-w64 编译后，产物就是一个独立的 Windows <code>.exe</code> 可执行文件，不依赖几十兆的 WebView2 或百兆以上的 Electron 运行时；</li><li>支持文件与文件夹直接拖拽（Drag &amp; Drop）绑树、平级兄弟目录手动同步以及内置的差异高亮预览。</li></ul>
-<blockquote><p>工具不一定越大越好。把一个高频痛点的交互收敛到“只做对一件事”，往往比配置一堆永远用不上的开关更让人安心。源码见 <a href="https://github.com/suakitsu/WayFileSync" target="_blank" rel="noopener">suakitsu/WayFileSync</a>。</p></blockquote></div><aside class="toc-sidebar" aria-label="文章目录"><div class="toc-header">目录</div><nav class="toc-nav"><a href="#section-1" class="toc-link">核心设计哲学：Default-Trust A, Review B</a><a href="#section-2" class="toc-link">树状同步拓扑与防环校验</a><a href="#section-3" class="toc-link">用 Go + Fyne 构建原生 Windows 桌面工具的体感</a></nav></aside></div><footer class="post-footer-section"><div class="post-tags"><a href="/tags.html#tag-Go" class="tag">#Go</a><a href="/tags.html#tag-%E5%B0%8F%E5%B7%A5%E5%85%B7" class="tag">#小工具</a><a href="/tags.html#tag-%E6%A1%8C%E9%9D%A2%E5%BC%80%E5%8F%91" class="tag">#桌面开发</a></div><nav class="post-navigation" aria-label="上下篇导航"><a href="/posts/shizuku-codex-pet.html" class="nav-item prev"><span class="nav-label">← 上一篇</span><span class="nav-title">给 Codex Desktop 加上沢渡雫桌宠与勿忘草皮肤：不碰安装包签名的本地 CDP 注入方案</span></a><a href="/posts/proxytunnel.html" class="nav-item next"><span class="nav-label">下一篇 →</span><span class="nav-title">ProxyTunnel：自托管 EdgeTunnel 与 Mihomo 代理池的真实出口探测与端口隔离设计</span></a></nav></footer></div></article></main><footer class="footer" id="footer"><div class="container"><div class="footer-content"><div class="footer-info"><p class="footer-title">suakitsu 的个人博客</p><p class="footer-subtitle">想法、项目与日常，慢慢记录。</p></div><div class="footer-links"><a href="https://github.com/suakitsu" target="_blank" rel="noopener">GitHub</a><a href="/about.html">关于</a><a href="mailto:suakitsu@163.com">联系邮箱：suakitsu@163.com</a></div><div class="footer-stats">5 篇文章 · 3 个分类</div><div class="footer-copyright"><p>© 2026 suakitsu</p></div></div></div></footer><dialog class="search-modal" id="searchModal" aria-labelledby="searchTitle"><div class="search-modal-overlay" id="searchOverlay" aria-hidden="true"></div><div class="search-modal-content"><h2 class="sr-only" id="searchTitle">搜索文章</h2><div class="search-modal-header"><input type="search" class="search-input" id="searchInput" placeholder="搜索文章..." aria-label="搜索文章关键词" autocomplete="off"><button class="search-close" id="searchClose" aria-label="关闭搜索"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18m0-12 12 12"/></svg></button></div><div class="search-results search-hint" id="searchResults" role="status">输入关键词搜索文章...</div></div></dialog><button class="back-to-top" id="backToTop" aria-label="返回顶部"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg></button></body></html>
+<p>同时，引擎默认内置了对 <code>logs/</code>、<code>tmp/</code>、<code>cache/</code>、<code>sessions/</code>、<code>node_modules/</code>、<code>vendor/</code> 和 <code>.git/</code> 的忽略规则，避免同步构建噪音与 Git 内部对象锁。</p>
+<h3 id="section-4">2. 父目录自动下发时的“待审核路径保护”（Pending Exclusion）</h3>
+<p>这是一个很多人在写单向同步时容易忽略的边界情况：<strong>假设子目录 <code>B</code> 已经修改了 <code>main.go</code>（处于 <code>StatusPending</code> 待审核状态，还没提交回 <code>A</code>），此时父目录 <code>A</code> 修改了另一个文件 <code>README.md</code> 触发了 <code>A -&gt; B</code> 自动下发。如果 <code>A -&gt; B</code> 无脑全量覆盖，那么 <code>B</code> 中尚未审核的 <code>main.go</code> 就会被 <code>A</code> 的旧版本冲掉！</strong></p>
+<p>在 <code>internal/sync/tree_sync.go</code> 的 <code>SyncParentToChildren</code> 实现中，我加入了<strong>先刷新子目录索引、再提取待审核路径排除集（<code>exclude := c.pendingPaths(childID)</code>）</strong>的保护逻辑：</p>
+<div class="code-block-wrapper"><div class="code-block-header"><div class="code-block-dots"><span class="code-block-dot"></span><span class="code-block-dot"></span><span class="code-block-dot"></span></div><span class="code-block-lang">GO</span></div><button class="code-copy-btn" type="button" aria-label="复制代码"><span class="copy-text">复制</span></button><pre class="highlight"><code>func (c *Controller) SyncParentToChildren(id string) error {
+	// 1. 下发前先根据最新文件索引刷新各子节点的 Pending 变更集
+	for _, childID := range c.Children[id] {
+		if err := c.refreshChildPendingFromIndex(childID); err != nil {
+			c.SetStatus(childID, StatusFailed)
+			return err
+		}
+	}
+	return c.RunInternal(func() error {
+		parent := c.Nodes[id]
+		for _, childID := range c.Children[id] {
+			child := c.Nodes[childID]
+			// 2. 提取该子节点所有处于待审核状态的相对路径（含重命名源路径）
+			exclude := c.pendingPaths(childID)
+			// 3. 同步时自动跳过子目录中正在等待人工审核的文件，防止静默覆盖
+			if err := SyncDirWithOptions(parent.Path, child.Path, SyncOptions{
+				Exclude: exclude,
+				Ignore:  c.ignorePair(id, childID),
+			}); err != nil {
+				c.SetStatus(childID, StatusFailed)
+				return err
+			}
+			if len(exclude) &gt; 0 {
+				c.Log(&quot;%s synced to %s; skipped %d pending path(s)&quot;, id, childID, len(exclude))
+			}
+		}
+		return nil
+	})
+}</code></pre></div>
+<h3 id="section-5">3. <code>fsnotify</code> 自写回声抑制（Internal Write Suppression）</h3>
+<p>当 WayFileSync 自己把文件从 <code>A</code> 拷贝到 <code>B</code>，或者把审核通过的文件从 <code>B</code> 写回 <code>A</code> 时，Windows 文件系统的 <code>fsnotify</code> 监听器同样会收到由程序自身引发的 <code>WRITE / CREATE / RENAME</code> 事件。如果不加区分，程序自己的同步动作又会触发新一轮的扫描和同步回声。</p>
+<p>更重要的是，在 Windows 下，操作系统内核投递文件变更通知往往比 <code>os.WriteFile</code> / <code>io.Copy</code> 函数返回<strong>滞后几十到几百毫秒</strong>。如果只用一个布尔锁在函数返回瞬间就释放，滞后到达的 <code>fsnotify</code> 事件依然会漏进来。</p>
+<p>因此，<code>Controller</code> 结合了<strong>原子递归深度计数器（<code>internalDepth atomic.Int32</code>）</strong>与<strong>900 毫秒尾迹静默窗口（<code>lastInternal atomic.Int64</code>）</strong>：</p>
+<div class="code-block-wrapper"><div class="code-block-header"><div class="code-block-dots"><span class="code-block-dot"></span><span class="code-block-dot"></span><span class="code-block-dot"></span></div><span class="code-block-lang">GO</span></div><button class="code-copy-btn" type="button" aria-label="复制代码"><span class="copy-text">复制</span></button><pre class="highlight"><code>func (c *Controller) IsInternalWrite() bool {
+	if c.internalDepth.Load() &gt; 0 {
+		return true
+	}
+	// Windows 下 fsnotify 事件可能在文件拷贝返回后延迟到达，保留 900ms 静默期
+	return time.Since(time.UnixMilli(c.lastInternal.Load())) &lt; 900*time.Millisecond
+}
+
+func (c *Controller) RunInternal(fn func() error) error {
+	c.internalDepth.Add(1)
+	defer func() {
+		c.lastInternal.Store(time.Now().UnixMilli())
+		c.internalDepth.Add(-1)
+	}()
+	return fn()
+}</code></pre></div>
+<h3 id="section-6">4. 重命名智能识别（<code>detectRenames</code>）、Myers Diff 预览与写前自动备份</h3>
+<p>当你在子目录 <code>B</code> 中把一个文件重命名或移动到另一个子文件夹时，朴素的目录对比会把它当成“删除了旧文件 <code>D</code> + 新增了新文件 <code>A</code>”。在 <code>internal/sync/diff.go</code> 中，<code>detectRenames</code> 会通过文件大小与纳秒级修改时间构造签名 <code>fileSig(info)</code>（<code>size:modTimeUnixNano</code>）：当新增项与删除项签名唯一匹配时，自动将其归并为一条 <code>StatusRenamed (R)</code> 变更（显示为 <code>old/path.go -&gt; new/path.go</code>）。</p>
+<p>而在差异预览与回写安全性上：</p>
+<ul><li><strong>纯 Go 原生 Myers Unified Diff</strong>：通过 <code>github.com/hexops/gotextdiff/myers</code> 直接在内存中计算文本文件的差异补丁，并在自动校验 UTF-8 有效性后屏蔽二进制乱码；</li><li><strong>写前强制备份与一键回滚</strong>：在 <code>ApplyChanges</code> 将变更应用到目标目录（无论是修改、删除还是重命名）之前，都会先调用 <code>BackupFile(dst.Path, ch.RelPath)</code> 保存历史版本快照，随时支持通过 <code>RestoreLatestVersion</code> 一键后悔还原。</li></ul>
+<table><thead><tr><th>变更状态</th><th>标识</th><th>触发条件</th><th>回写父目录时的安全动作</th></tr></thead><tbody><tr><td><strong>新增</strong></td><td><code>A</code> (Added)</td><td>子目录存在、父目录不存在</td><td>检查目标路径 $\rightarrow$ 拷贝新文件 $\rightarrow$ 更新节点索引</td></tr><tr><td><strong>修改</strong></td><td><code>M</code> (Modified)</td><td>双方均存在但大小或修改时间/内容不同</td><td><strong>自动备份父目录原文件</strong> $\rightarrow$ 覆盖写入 $\rightarrow$ 支持一键回滚</td></tr><tr><td><strong>删除</strong></td><td><code>D</code> (Deleted)</td><td>父目录存在、子目录已删除</td><td><strong>自动备份父目录原文件</strong> $\rightarrow$ 执行删除 $\rightarrow$ 更新节点索引</td></tr><tr><td><strong>重命名</strong></td><td><code>R</code> (Renamed)</td><td>唯一匹配 <code>size:modTime</code> 签名的删增对</td><td><strong>备份新旧路径</strong> $\rightarrow$ 执行 <code>os.Rename</code> 与内容同步</td></tr></tbody></table>
+<h2 id="section-7">三、交互打磨与 Windows 单文件打包</h2>
+<p>为了日常用起来足够顺手，我在 Fyne GUI 层也加了不少小细节：</p>
+<ul><li><strong>全场景拖拽（Drag &amp; Drop）</strong>：还没配目录时拖入文件夹直接设为根目录 <code>A</code>；已选中某个节点时拖入新文件夹，弹窗询问“替换当前路径”还是“添加为下级同步副本”；甚至不小心拖入了一个具体的文件时，程序也会自动取其所在的父文件夹路径；</li><li><strong>平级兄弟节点手动同步</strong>：除了父子同步外，同属一个父节点的两个兄弟副本（如 <code>copy1</code> 与 <code>copy2</code>）之间也可以手动发起差异扫描并勾选同步；</li><li><strong>纯净单文件分发</strong>：利用 MSYS2 / MinGW-w64 与 <code>-ldflags=&quot;-H=windowsgui -s -w&quot;</code> 编译后，产物只有一个几兆大小的独立 <code>WayFileSync.exe</code>，加上旁边一个人类可读的 <code>sync_tree.json</code> 即可拷贝到任何 Windows 机器上即开即用。</li></ul>
+<div class="code-block-wrapper"><div class="code-block-header"><div class="code-block-dots"><span class="code-block-dot"></span><span class="code-block-dot"></span><span class="code-block-dot"></span></div><span class="code-block-lang">POWERSHELL</span></div><button class="code-copy-btn" type="button" aria-label="复制代码"><span class="copy-text">复制</span></button><pre class="highlight"><code># 在 Windows 下使用 MinGW-w64 编译无黑框的单文件桌面程序
+cd WayFileSync
+$env:Path = &quot;C:\msys64\ucrt64\bin;$env:Path&quot;
+$env:CGO_ENABLED = &quot;1&quot;
+go build -trimpath -ldflags=&quot;-H=windowsgui -s -w&quot; -o dist\WayFileSync.exe ./cmd/tree-sync</code></pre></div>
+<h2 id="section-8">四、小结</h2>
+<p>很多时候，“自己造轮子”并不是因为现有的轮子不够强大，而是因为<strong>通用工具为了照顾所有人，不得不把安全边界交给用户自己去配置</strong>。通过把规则写死在“父目录自动下发、子目录审核回写”，WayFileSync 让我可以放心地把副本目录交给任何自动化脚本或 AI Agent 折腾，而永远不必担心基准代码库被意外破坏。</p>
+<p>项目源码与英文文档已开源在：<a href="https://github.com/suakitsu/WayFileSync" target="_blank" rel="noopener">suakitsu/WayFileSync</a>。</p></div><aside class="toc-sidebar" aria-label="文章目录"><div class="toc-header">目录</div><nav class="toc-nav"><a href="#section-1" class="toc-link">一、为什么通用同步工具在这个场景下“太重又太危险”</a><a href="#section-2" class="toc-link">二、深入 Go 核心实现：四个关键工程细节</a><a href="#section-3" class="toc-link toc-h3">1. 树状拓扑校验与防嵌套死循环（sameOrNested）</a><a href="#section-4" class="toc-link toc-h3">2. 父目录自动下发时的“待审核路径保护”（Pending Exclusion）</a><a href="#section-5" class="toc-link toc-h3">3. fsnotify 自写回声抑制（Internal Write Suppression）</a><a href="#section-6" class="toc-link toc-h3">4. 重命名智能识别（detectRenames）、Myers Diff 预览与写前自动备份</a><a href="#section-7" class="toc-link">三、交互打磨与 Windows 单文件打包</a><a href="#section-8" class="toc-link">四、小结</a></nav></aside></div><footer class="post-footer-section"><div class="post-tags"><a href="/tags.html#tag-Go" class="tag">#Go</a><a href="/tags.html#tag-%E5%B0%8F%E5%B7%A5%E5%85%B7" class="tag">#小工具</a><a href="/tags.html#tag-%E6%A1%8C%E9%9D%A2%E5%BC%80%E5%8F%91" class="tag">#桌面开发</a></div><nav class="post-navigation" aria-label="上下篇导航"><a href="/posts/shizuku-codex-pet.html" class="nav-item prev"><span class="nav-label">← 上一篇</span><span class="nav-title">给 Codex Desktop 加上沢渡雫桌宠与勿忘草皮肤：不碰安装包签名的本地 CDP 注入方案</span></a><a href="/posts/proxytunnel.html" class="nav-item next"><span class="nav-label">下一篇 →</span><span class="nav-title">ProxyTunnel：自托管 EdgeTunnel 与 Mihomo 代理池的真实出口探测与端口隔离设计</span></a></nav></footer></div></article></main><footer class="footer" id="footer"><div class="container"><div class="footer-content"><div class="footer-info"><p class="footer-title">suakitsu 的个人博客</p><p class="footer-subtitle">想法、项目与日常，慢慢记录。</p></div><div class="footer-links"><a href="https://github.com/suakitsu" target="_blank" rel="noopener">GitHub</a><a href="/about.html">关于</a><a href="mailto:suakitsu@163.com">联系邮箱：suakitsu@163.com</a></div><div class="footer-stats">5 篇文章 · 3 个分类</div><div class="footer-copyright"><p>© 2026 suakitsu</p></div></div></div></footer><dialog class="search-modal" id="searchModal" aria-labelledby="searchTitle"><div class="search-modal-overlay" id="searchOverlay" aria-hidden="true"></div><div class="search-modal-content"><h2 class="sr-only" id="searchTitle">搜索文章</h2><div class="search-modal-header"><input type="search" class="search-input" id="searchInput" placeholder="搜索文章..." aria-label="搜索文章关键词" autocomplete="off"><button class="search-close" id="searchClose" aria-label="关闭搜索"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18m0-12 12 12"/></svg></button></div><div class="search-results search-hint" id="searchResults" role="status">输入关键词搜索文章...</div></div></dialog><button class="back-to-top" id="backToTop" aria-label="返回顶部"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg></button></body></html>
