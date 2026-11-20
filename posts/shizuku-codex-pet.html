@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#f0f8ff"><title>给 Codex Desktop 加上沢渡雫桌宠与勿忘草皮肤：不碰安装包签名的本地 CDP 注入方案 · suakitsu</title><meta name="description" content="为 Codex Desktop 制作三套十六向视线追踪的沢渡雫 v2 动画桌宠（全身版 / 像素版 / Q 版），并通过 127.0.0.1 本地回环 CDP 在不触碰 WindowsApps 与 app.asar 签名的前提下注入勿忘草主题皮肤。"><link rel="canonical" href="https://suakitsu.github.io/posts/shizuku-codex-pet.html"><link rel="icon" href="/favicon.png" type="image/png"><meta property="og:title" content="给 Codex Desktop 加上沢渡雫桌宠与勿忘草皮肤：不碰安装包签名的本地 CDP 注入方案 · suakitsu"><meta property="og:description" content="为 Codex Desktop 制作三套十六向视线追踪的沢渡雫 v2 动画桌宠（全身版 / 像素版 / Q 版），并通过 127.0.0.1 本地回环 CDP 在不触碰 WindowsApps 与 app.asar 签名的前提下注入勿忘草主题皮肤。"><meta property="og:url" content="https://suakitsu.github.io/posts/shizuku-codex-pet.html"><meta property="og:type" content="website"><meta property="og:image" content="https://suakitsu.github.io/avatar.png"><script>(() => { try {
+  const saved = localStorage.getItem('suakitsu-theme');
+  document.documentElement.dataset.theme = saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+} catch {} })();</script><link rel="stylesheet" href="/style.css"><script src="/main.js" defer></script></head>
+<body><div id="pageStart" aria-hidden="true" style="height:1px;position:absolute;top:0"></div><div class="skip-links"><a href="#main">跳到主要内容</a></div><nav class="navbar" id="site-nav" aria-label="主导航">
+  <div class="container">
+    <a href="/" class="logo">
+      <span class="logo-text">suakitsu</span>
+    </a>
+    
+    <div class="nav-right">
+      <div class="nav-links">
+        <a href="/" class="nav-link">首页</a>
+        <a href="/categories.html" class="nav-link">分类</a>
+        <a href="/tags.html" class="nav-link">标签</a>
+        <a href="/year-archive.html" class="nav-link">归档</a>
+        <a href="/about.html" class="nav-link">关于</a>
+        <a href="https://github.com/suakitsu" target="_blank" rel="noopener" class="nav-link">GitHub</a>
+      </div>
+      
+      <button class="swarm-replay-toggle" id="swarmReplayBtn" aria-label="重播页面构建动效" title="重播页面构建动效">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/>
+          <path d="M5 3v4"/><path d="M3 5h4"/>
+        </svg>
+      </button>
+
+      <button class="search-toggle" id="searchToggle" aria-label="搜索">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="m21 21-4.35-4.35"/>
+        </svg>
+      </button>
+      
+      <button class="theme-toggle" id="themeToggle" aria-label="切换主题" aria-pressed="false">
+        <span class="icon-moon">🌙</span>
+        <span class="icon-sun">☀️</span>
+      </button>
+      
+      <button class="menu-toggle" id="menuToggle" aria-label="菜单" aria-controls="mobileMenu" aria-expanded="false">
+        ☰
+      </button>
+    </div>
+  </div>
+</nav>
+
+
+<div class="mobile-overlay" id="mobileOverlay"></div>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="/" class="mobile-link">首页</a>
+  <a href="/categories.html" class="mobile-link">分类</a>
+  <a href="/tags.html" class="mobile-link">标签</a>
+  <a href="/year-archive.html" class="mobile-link">归档</a>
+  <a href="/about.html" class="mobile-link">关于</a>
+  <a href="https://github.com/suakitsu" target="_blank" rel="noopener" class="mobile-link">GitHub</a>
+</div>
+<main id="main" class="main-content"><div class="reading-progress-bar" id="readingProgressBar" aria-hidden="true"></div><article class="post-article-section"><div class="container"><nav class="breadcrumb" aria-label="面包屑导航"><a href="/">首页</a><span class="separator">/</span><a href="/categories.html#cat-%E6%97%A5%E5%B8%B8%E9%9A%8F%E6%83%B3">日常随想</a><span class="separator">/</span><span class="current">给 Codex Desktop 加上沢渡雫桌宠与勿忘草皮肤：不碰安装包签名的本地 CDP 注入方案</span></nav><header class="post-header"><div class="post-meta"><a href="/categories.html#cat-%E6%97%A5%E5%B8%B8%E9%9A%8F%E6%83%B3" class="post-category">日常随想</a><time datetime="2026-11-09">2026-11-09</time><span class="read-time">约 4 分钟阅读</span><a href="https://github.com/suakitsu/shizuku-codex-pet" target="_blank" rel="noopener" class="post-repo-link">GitHub 仓库 ↗</a></div><h1 class="post-title">给 Codex Desktop 加上沢渡雫桌宠与勿忘草皮肤：不碰安装包签名的本地 CDP 注入方案</h1><p class="post-excerpt">为 Codex Desktop 制作三套十六向视线追踪的沢渡雫 v2 动画桌宠（全身版 / 像素版 / Q 版），并通过 127.0.0.1 本地回环 CDP 在不触碰 WindowsApps 与 app.asar 签名的前提下注入勿忘草主题皮肤。</p></header><div class="toc-mobile"><button type="button" class="toc-mobile-toggle" id="tocMobileToggle" aria-expanded="false"><span>文章目录</span><span class="toc-toggle-icon">▼</span></button><nav class="toc-mobile-nav" id="tocMobileNav" aria-label="移动端文章目录"><a href="#section-1" class="toc-link">三套支持十六向注视的 Codex v2 动画桌宠</a><a href="#section-2" class="toc-link">为什么不用解包 app.asar 的方式改皮肤</a><a href="#section-3" class="toc-link">基于本地回环（127.0.0.1）的无侵入皮肤注入</a></nav></div><div class="post-content-wrapper"><div class="post-content"><p>平时高频使用的开发工具，总希望能带一点自己喜欢的色彩。这个博客采用了清透的 <strong>Alice Blue（爱丽丝蓝）</strong> 主题，而我同样为日常使用的 Codex Desktop 制作了一套同色系的非官方、非商业同人扩展 —— <a href="https://github.com/suakitsu/shizuku-codex-pet" target="_blank" rel="noopener">shizuku-codex-pet</a>，包含三套以《美少女万華鏡 -忘れな草と永遠の少女-》<strong>沢渡雫</strong>为灵感的 v2 动画桌宠，以及配套的 Windows 勿忘草皮肤。</p>
+<h2 id="section-1">三套支持十六向注视的 Codex v2 动画桌宠</h2>
+<p>Codex Desktop 的 v2 桌宠系统支持丰富的状态机与鼠标视线追踪。为了让不同尺寸屏幕和审美偏好都能找到合适的陪伴感，我制作了三种不同画风的版本：</p>
+<table><thead><tr><th>文件夹标识</th><th>风格版本</th><th>特点说明</th></tr></thead><tbody><tr><td><code>shizuku</code></td><td><strong>全身表现版</strong></td><td>完整呈现角色服饰与神态细节，动作过渡细腻</td></tr><tr><td><code>shizuku-pixel</code></td><td><strong>复古像素版</strong></td><td>颗粒感清晰的像素风格，适合搭配极客向代码编辑器</td></tr><tr><td><code>shizuku-q</code></td><td><strong>可爱 Q 版</strong></td><td>二头身比例，占用桌面视觉面积小，轻巧不挡代码</td></tr></tbody></table>
+<p>三套桌宠均包含 Codex v2 标准动作集与<strong>顺时针十六向注视（16-direction clockwise gaze）</strong>。安装时只需将对应的文件夹放入 <code>%USERPROFILE%\.codex\pets\</code>（或 <code>%CODEX_HOME%\pets\</code>），保持每个目录内的 <code>pet.json</code> 动作定义与 <code>spritesheet.webp</code> 精灵图成对即可：</p>
+<div class="code-block-wrapper"><div class="code-block-header"><div class="code-block-dots"><span class="code-block-dot"></span><span class="code-block-dot"></span><span class="code-block-dot"></span></div><span class="code-block-lang">TEXT</span></div><button class="code-copy-btn" type="button" aria-label="复制代码"><span class="copy-text">复制</span></button><pre class="highlight"><code>.codex/pets/
+├── shizuku/
+│   ├── pet.json
+│   └── spritesheet.webp
+├── shizuku-pixel/
+│   ├── pet.json
+│   └── spritesheet.webp
+└── shizuku-q/
+    ├── pet.json
+    └── spritesheet.webp</code></pre></div>
+<h2 id="section-2">为什么不用解包 <code>app.asar</code> 的方式改皮肤</h2>
+<p>在给 Windows 桌面端（尤其是通过 Microsoft Store 安装的 Codex 应用）换肤时，最常见但风险最高的做法是强行获取 <code>WindowsApps</code> 目录权限、解包修改 <code>app.asar</code> 再重新打包。这样做有三个很大的弊端：</p>
+<ol><li><strong>破坏应用数字签名</strong>：容易导致 Windows 应用无法启动或更新失败；</li><li><strong>升级即失效</strong>：每次官方客户端小版本更新都要重新解包替换；</li><li><strong>透明层冲突</strong>：全局 CSS 覆盖很容易把 <code>/avatar-overlay</code> 桌宠悬浮窗背景也涂成不透明色块，导致桌宠变成“顶着一块背景板”。</li></ol>
+<h2 id="section-3">基于本地回环（<code>127.0.0.1</code>）的无侵入皮肤注入</h2>
+<p>受 <code>Fei-Away/Codex-Dream-Skin</code> 思路启发，<code>shizuku-codex-pet</code> 的勿忘草皮肤采用了<strong>纯本地回环 CDP（Chrome DevTools Protocol）样式注入</strong>方案：</p>
+<ul><li><strong>零文件篡改</strong>：完全不触碰 <code>WindowsApps</code> 安装目录与 <code>app.asar</code>，不破坏任何官方签名，也不读取用户的 API Key 或聊天记录；</li><li><strong>桌宠图层友好</strong>：专门识别并跳过 <code>/avatar-overlay</code> 桌宠透明窗口，确保勿忘草浅蓝毛玻璃主界面与透明悬浮桌宠完美共存；</li><li><strong>一键恢复与校验</strong>：在 Releases 中分别提供了桌宠包（<code>v1.0.0</code>）与皮肤包（<code>skin-v1.0.0</code>），附带独立的安装/恢复脚本与 <code>.sha256</code> 完整性校验文件。</li></ul>
+<blockquote><p>这是一个纯粹出于喜爱的非商业同人小作品（相关角色权利归原作权利方所有）。希望这抹勿忘草蓝也能让写代码的过程多一点轻松的心情。项目地址：<a href="https://github.com/suakitsu/shizuku-codex-pet" target="_blank" rel="noopener">suakitsu/shizuku-codex-pet</a>。</p></blockquote></div><aside class="toc-sidebar" aria-label="文章目录"><div class="toc-header">目录</div><nav class="toc-nav"><a href="#section-1" class="toc-link">三套支持十六向注视的 Codex v2 动画桌宠</a><a href="#section-2" class="toc-link">为什么不用解包 app.asar 的方式改皮肤</a><a href="#section-3" class="toc-link">基于本地回环（127.0.0.1）的无侵入皮肤注入</a></nav></aside></div><footer class="post-footer-section"><div class="post-tags"><a href="/tags.html#tag-%E5%88%9B%E4%BD%9C" class="tag">#创作</a><a href="/tags.html#tag-%E4%BA%8C%E6%AC%A1%E5%85%83" class="tag">#二次元</a><a href="/tags.html#tag-%E6%A1%8C%E9%9D%A2%E7%BE%8E%E5%8C%96" class="tag">#桌面美化</a><a href="/tags.html#tag-%E5%B0%8F%E5%B7%A5%E5%85%B7" class="tag">#小工具</a></div><nav class="post-navigation" aria-label="上下篇导航"><div></div><a href="/posts/wayfilesync.html" class="nav-item next"><span class="nav-label">下一篇 →</span><span class="nav-title">默认信任 A，审核回写 B：用 Go + Fyne 写一个克制的目录树同步工具 WayFileSync</span></a></nav></footer></div></article></main><footer class="footer" id="footer"><div class="container"><div class="footer-content"><div class="footer-info"><p class="footer-title">suakitsu 的个人博客</p><p class="footer-subtitle">想法、项目与日常，慢慢记录。</p></div><div class="footer-links"><a href="https://github.com/suakitsu" target="_blank" rel="noopener">GitHub</a><a href="/about.html">关于</a><a href="mailto:suakitsu@163.com">联系邮箱：suakitsu@163.com</a></div><div class="footer-stats">5 篇文章 · 3 个分类</div><div class="footer-copyright"><p>© 2026 suakitsu</p></div></div></div></footer><dialog class="search-modal" id="searchModal" aria-labelledby="searchTitle"><div class="search-modal-overlay" id="searchOverlay" aria-hidden="true"></div><div class="search-modal-content"><h2 class="sr-only" id="searchTitle">搜索文章</h2><div class="search-modal-header"><input type="search" class="search-input" id="searchInput" placeholder="搜索文章..." aria-label="搜索文章关键词" autocomplete="off"><button class="search-close" id="searchClose" aria-label="关闭搜索"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18m0-12 12 12"/></svg></button></div><div class="search-results search-hint" id="searchResults" role="status">输入关键词搜索文章...</div></div></dialog><button class="back-to-top" id="backToTop" aria-label="返回顶部"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg></button></body></html>

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#f0f8ff"><title>默认信任 A，审核回写 B：用 Go + Fyne 写一个克制的目录树同步工具 WayFileSync · suakitsu</title><meta name="description" content="通用同步工具功能强大，但在父子工作目录场景下很容易误覆盖。WayFileSync 把规则收敛为一件事：父目录 A 变更自动同步到 B，子目录 B 的修改必须先看 Unified Diff 审核后再回写。"><link rel="canonical" href="https://suakitsu.github.io/posts/wayfilesync.html"><link rel="icon" href="/favicon.png" type="image/png"><meta property="og:title" content="默认信任 A，审核回写 B：用 Go + Fyne 写一个克制的目录树同步工具 WayFileSync · suakitsu"><meta property="og:description" content="通用同步工具功能强大，但在父子工作目录场景下很容易误覆盖。WayFileSync 把规则收敛为一件事：父目录 A 变更自动同步到 B，子目录 B 的修改必须先看 Unified Diff 审核后再回写。"><meta property="og:url" content="https://suakitsu.github.io/posts/wayfilesync.html"><meta property="og:type" content="website"><meta property="og:image" content="https://suakitsu.github.io/avatar.png"><script>(() => { try {
+  const saved = localStorage.getItem('suakitsu-theme');
+  document.documentElement.dataset.theme = saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+} catch {} })();</script><link rel="stylesheet" href="/style.css"><script src="/main.js" defer></script></head>
+<body><div id="pageStart" aria-hidden="true" style="height:1px;position:absolute;top:0"></div><div class="skip-links"><a href="#main">跳到主要内容</a></div><nav class="navbar" id="site-nav" aria-label="主导航">
+  <div class="container">
+    <a href="/" class="logo">
+      <span class="logo-text">suakitsu</span>
+    </a>
+    
+    <div class="nav-right">
+      <div class="nav-links">
+        <a href="/" class="nav-link">首页</a>
+        <a href="/categories.html" class="nav-link">分类</a>
+        <a href="/tags.html" class="nav-link">标签</a>
+        <a href="/year-archive.html" class="nav-link">归档</a>
+        <a href="/about.html" class="nav-link">关于</a>
+        <a href="https://github.com/suakitsu" target="_blank" rel="noopener" class="nav-link">GitHub</a>
+      </div>
+      
+      <button class="swarm-replay-toggle" id="swarmReplayBtn" aria-label="重播页面构建动效" title="重播页面构建动效">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/>
+          <path d="M5 3v4"/><path d="M3 5h4"/>
+        </svg>
+      </button>
+
+      <button class="search-toggle" id="searchToggle" aria-label="搜索">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="m21 21-4.35-4.35"/>
+        </svg>
+      </button>
+      
+      <button class="theme-toggle" id="themeToggle" aria-label="切换主题" aria-pressed="false">
+        <span class="icon-moon">🌙</span>
+        <span class="icon-sun">☀️</span>
+      </button>
+      
+      <button class="menu-toggle" id="menuToggle" aria-label="菜单" aria-controls="mobileMenu" aria-expanded="false">
+        ☰
+      </button>
+    </div>
+  </div>
+</nav>
+
+
+<div class="mobile-overlay" id="mobileOverlay"></div>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="/" class="mobile-link">首页</a>
+  <a href="/categories.html" class="mobile-link">分类</a>
+  <a href="/tags.html" class="mobile-link">标签</a>
+  <a href="/year-archive.html" class="mobile-link">归档</a>
+  <a href="/about.html" class="mobile-link">关于</a>
+  <a href="https://github.com/suakitsu" target="_blank" rel="noopener" class="mobile-link">GitHub</a>
+</div>
+<main id="main" class="main-content"><div class="reading-progress-bar" id="readingProgressBar" aria-hidden="true"></div><article class="post-article-section"><div class="container"><nav class="breadcrumb" aria-label="面包屑导航"><a href="/">首页</a><span class="separator">/</span><a href="/categories.html#cat-%E9%A1%B9%E7%9B%AE%E8%AE%B0%E5%BD%95">项目记录</a><span class="separator">/</span><span class="current">默认信任 A，审核回写 B：用 Go + Fyne 写一个克制的目录树同步工具 WayFileSync</span></nav><header class="post-header"><div class="post-meta"><a href="/categories.html#cat-%E9%A1%B9%E7%9B%AE%E8%AE%B0%E5%BD%95" class="post-category">项目记录</a><time datetime="2026-11-12">2026-11-12</time><span class="read-time">约 4 分钟阅读</span><a href="https://github.com/suakitsu/WayFileSync" target="_blank" rel="noopener" class="post-repo-link">GitHub 仓库 ↗</a></div><h1 class="post-title">默认信任 A，审核回写 B：用 Go + Fyne 写一个克制的目录树同步工具 WayFileSync</h1><p class="post-excerpt">通用同步工具功能强大，但在父子工作目录场景下很容易误覆盖。WayFileSync 把规则收敛为一件事：父目录 A 变更自动同步到 B，子目录 B 的修改必须先看 Unified Diff 审核后再回写。</p></header><div class="toc-mobile"><button type="button" class="toc-mobile-toggle" id="tocMobileToggle" aria-expanded="false"><span>文章目录</span><span class="toc-toggle-icon">▼</span></button><nav class="toc-mobile-nav" id="tocMobileNav" aria-label="移动端文章目录"><a href="#section-1" class="toc-link">核心设计哲学：Default-Trust A, Review B</a><a href="#section-2" class="toc-link">树状同步拓扑与防环校验</a><a href="#section-3" class="toc-link">用 Go + Fyne 构建原生 Windows 桌面工具的体感</a></nav></div><div class="post-content-wrapper"><div class="post-content"><p>市面上并不缺文件同步工具：FreeFileSync、Syncthing、rsync 都很成熟。但在我自己的工作流里，经常遇到一种非对称的目录同步需求——<strong>主目录 <code>A</code> 是经过整理的基准仓库，派生工作目录 <code>B</code>（比如交给实验脚本、AI Agent 或外部工具处理的沙盒副本）需要时刻跟进 <code>A</code> 的更新，但 <code>B</code> 里面产生的修改绝不能未经检查就自动覆盖回 <code>A</code>。</strong></p>
+<p>如果用传统双向同步，一旦 <code>B</code> 里的脚本改坏了文件，错误会立刻污染基准目录 <code>A</code>；如果每次手动比对整个目录树，在多层级子目录下又极其繁琐。于是我用 Go 和 Fyne 写了 <a href="https://github.com/suakitsu/WayFileSync" target="_blank" rel="noopener">WayFileSync</a>。</p>
+<h2 id="section-1">核心设计哲学：Default-Trust A, Review B</h2>
+<p>WayFileSync 故意砍掉了通用同步工具里复杂的双向冲突合并策略，只保留一条清晰的单向信任 + 审核回写规则：</p>
+<ol><li><strong>下行自动同步（<code>A -&gt; B</code>）</strong>：父节点 <code>A</code> 是受信任的基准源，<code>A</code> 中的新增与修改会自动同步到子节点 <code>B</code>；</li><li><strong>上行强制审核（<code>B -&gt; A</code>）</strong>：子节点 <code>B</code> 中发生的文件变更不会自动覆盖 <code>A</code>，而是进入待审核队列（Pending Review）；</li><li><strong>Unified Diff 逐项确认</strong>：在 GUI 界面中直接查看文本文件的 Unified Diff 差异对比，确认无误后才回写到 <code>A</code>，或者一键用 <code>A</code> 重置 <code>B</code>。</li></ol>
+<div class="code-block-wrapper"><div class="code-block-header"><div class="code-block-dots"><span class="code-block-dot"></span><span class="code-block-dot"></span><span class="code-block-dot"></span></div><span class="code-block-lang">TEXT</span></div><button class="code-copy-btn" type="button" aria-label="复制代码"><span class="copy-text">复制</span></button><pre class="highlight"><code>[ 基准父目录 A ] ──── 自动下行同步 (Auto Sync) ────▶ [ 派生子目录 B ]
+       ▲                                                    │
+       └──── 人工查看 Unified Diff 审核通过后回写 ──────────┘</code></pre></div>
+<h2 id="section-2">树状同步拓扑与防环校验</h2>
+<p>除了单对 <code>A -&gt; B</code> 目录外，有时一个基准目录会派生出多个子目录，甚至形成两层派生树（<code>A -&gt; B -&gt; C</code>）。WayFileSync 使用 <code>sync_tree.json</code> 来维护目录树拓扑，并在添加节点时执行两项严格的静态安全检查：</p>
+<ul><li><strong>环路检测（Cycle Prevention）</strong>：禁止任何节点直接或间接将自己的祖先节点设为下游；</li><li><strong>父子目录嵌套拦截（Containment Check）</strong>：严禁将 <code>C:\Work\Project</code> 与它的子文件夹 <code>C:\Work\Project\sub</code> 绑定为同步对，从根源上杜绝递归无限复制。</li></ul>
+<div class="code-block-wrapper"><div class="code-block-header"><div class="code-block-dots"><span class="code-block-dot"></span><span class="code-block-dot"></span><span class="code-block-dot"></span></div><span class="code-block-lang">JSON</span></div><button class="code-copy-btn" type="button" aria-label="复制代码"><span class="copy-text">复制</span></button><pre class="highlight"><code>{
+  &quot;nodes&quot;: [
+    {
+      &quot;id&quot;: &quot;root-workspace&quot;,
+      &quot;path&quot;: &quot;C:/Workspace/BaseRepo&quot;,
+      &quot;children&quot;: [&quot;sandbox-agent-a&quot;, &quot;sandbox-agent-b&quot;]
+    }
+  ]
+}</code></pre></div>
+<h2 id="section-3">用 Go + Fyne 构建原生 Windows 桌面工具的体感</h2>
+<p>选择 <strong>Go + Fyne</strong> 来写这个桌面小工具，主要是看中了它的单文件分发能力：</p>
+<ul><li>通过 CGO + MinGW-w64 编译后，产物就是一个独立的 Windows <code>.exe</code> 可执行文件，不依赖几十兆的 WebView2 或百兆以上的 Electron 运行时；</li><li>支持文件与文件夹直接拖拽（Drag &amp; Drop）绑树、平级兄弟目录手动同步以及内置的差异高亮预览。</li></ul>
+<blockquote><p>工具不一定越大越好。把一个高频痛点的交互收敛到“只做对一件事”，往往比配置一堆永远用不上的开关更让人安心。源码见 <a href="https://github.com/suakitsu/WayFileSync" target="_blank" rel="noopener">suakitsu/WayFileSync</a>。</p></blockquote></div><aside class="toc-sidebar" aria-label="文章目录"><div class="toc-header">目录</div><nav class="toc-nav"><a href="#section-1" class="toc-link">核心设计哲学：Default-Trust A, Review B</a><a href="#section-2" class="toc-link">树状同步拓扑与防环校验</a><a href="#section-3" class="toc-link">用 Go + Fyne 构建原生 Windows 桌面工具的体感</a></nav></aside></div><footer class="post-footer-section"><div class="post-tags"><a href="/tags.html#tag-Go" class="tag">#Go</a><a href="/tags.html#tag-%E5%B0%8F%E5%B7%A5%E5%85%B7" class="tag">#小工具</a><a href="/tags.html#tag-%E6%A1%8C%E9%9D%A2%E5%BC%80%E5%8F%91" class="tag">#桌面开发</a></div><nav class="post-navigation" aria-label="上下篇导航"><a href="/posts/shizuku-codex-pet.html" class="nav-item prev"><span class="nav-label">← 上一篇</span><span class="nav-title">给 Codex Desktop 加上沢渡雫桌宠与勿忘草皮肤：不碰安装包签名的本地 CDP 注入方案</span></a><a href="/posts/proxytunnel.html" class="nav-item next"><span class="nav-label">下一篇 →</span><span class="nav-title">ProxyTunnel：自托管 EdgeTunnel 与 Mihomo 代理池的真实出口探测与端口隔离设计</span></a></nav></footer></div></article></main><footer class="footer" id="footer"><div class="container"><div class="footer-content"><div class="footer-info"><p class="footer-title">suakitsu 的个人博客</p><p class="footer-subtitle">想法、项目与日常，慢慢记录。</p></div><div class="footer-links"><a href="https://github.com/suakitsu" target="_blank" rel="noopener">GitHub</a><a href="/about.html">关于</a><a href="mailto:suakitsu@163.com">联系邮箱：suakitsu@163.com</a></div><div class="footer-stats">5 篇文章 · 3 个分类</div><div class="footer-copyright"><p>© 2026 suakitsu</p></div></div></div></footer><dialog class="search-modal" id="searchModal" aria-labelledby="searchTitle"><div class="search-modal-overlay" id="searchOverlay" aria-hidden="true"></div><div class="search-modal-content"><h2 class="sr-only" id="searchTitle">搜索文章</h2><div class="search-modal-header"><input type="search" class="search-input" id="searchInput" placeholder="搜索文章..." aria-label="搜索文章关键词" autocomplete="off"><button class="search-close" id="searchClose" aria-label="关闭搜索"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18m0-12 12 12"/></svg></button></div><div class="search-results search-hint" id="searchResults" role="status">输入关键词搜索文章...</div></div></dialog><button class="back-to-top" id="backToTop" aria-label="返回顶部"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg></button></body></html>

@@ -1312,6 +1312,70 @@
     };
     reduceMotion.addEventListener('change', syncMotion);
     syncMotion();
+
+    document.querySelectorAll('.code-copy-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const wrapper = btn.closest('.code-block-wrapper');
+        const codeEl = wrapper ? wrapper.querySelector('pre code') : null;
+        if (!codeEl) return;
+        try {
+          await navigator.clipboard.writeText(codeEl.textContent);
+          const label = btn.querySelector('.copy-text');
+          if (label) label.textContent = '已复制';
+          btn.classList.add('copied');
+          setTimeout(() => {
+            btn.classList.remove('copied');
+            if (label) label.textContent = '复制';
+          }, 1800);
+        } catch {}
+      });
+    });
+
+    const progressBar = document.getElementById('readingProgressBar');
+    const postContent = document.querySelector('.post-content');
+    if (progressBar && postContent) {
+      const updateProgress = () => {
+        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        const pct = docHeight > 0 ? Math.min(100, Math.max(0, (window.scrollY / docHeight) * 100)) : 0;
+        progressBar.style.width = `${pct.toFixed(1)}%`;
+      };
+      window.addEventListener('scroll', updateProgress, { passive: true });
+      updateProgress();
+    }
+
+    const tocToggle = document.getElementById('tocMobileToggle');
+    const tocMobileNav = document.getElementById('tocMobileNav');
+    if (tocToggle && tocMobileNav) {
+      tocToggle.addEventListener('click', () => {
+        const open = !tocMobileNav.classList.contains('active');
+        tocToggle.classList.toggle('active', open);
+        tocMobileNav.classList.toggle('active', open);
+        tocToggle.setAttribute('aria-expanded', String(open));
+      });
+    }
+
+    const tocLinks = Array.from(document.querySelectorAll('.toc-sidebar .toc-link'));
+    if (tocLinks.length > 0) {
+      const headings = tocLinks
+        .map(link => document.getElementById(decodeURIComponent(link.getAttribute('href').slice(1))))
+        .filter(Boolean);
+      const syncActiveToc = () => {
+        let activeId = headings[0]?.id || '';
+        for (const h of headings) {
+          if (h.getBoundingClientRect().top <= 120) {
+            activeId = h.id;
+          } else {
+            break;
+          }
+        }
+        tocLinks.forEach(link => {
+          const id = decodeURIComponent(link.getAttribute('href').slice(1));
+          link.classList.toggle('active', id === activeId);
+        });
+      };
+      window.addEventListener('scroll', syncActiveToc, { passive: true });
+      syncActiveToc();
+    }
   }
   document.addEventListener('DOMContentLoaded', () => {
     initControls();

@@ -1,1 +1,72 @@
-[]
+[
+  {
+    "title": "Veo Flow：基于 Veo 3.1 的 AI 长视频帧级无缝衔接与防重扣费实践",
+    "url": "/posts/veo-flow.html",
+    "date": "2026-11-20",
+    "category": "项目记录",
+    "tags": [
+      "Python",
+      "AI视频",
+      "Veo",
+      "FFmpeg"
+    ],
+    "excerpt": "围绕 AI 生成视频分段画面跳变与高昂 API 重复扣费两个核心痛点，记录 Veo Flow 如何用 FFmpeg 尾帧续接、TTS 自动切分混音与单 IP 任务锁构建一套可落地的 AI 视频工作台。",
+    "content": "在尝试用大模型生成超过单次时长上限的视频时，最容易遇到两个现实问题： 分段视频拼接处画面跳变严重 ，以及 生成耗时长、前端误点或轮询重试导致的高额 API 重复扣费 。 为了把零散的脚本收敛成真正顺手的创作工具，我做了 veo flow —— 一套基于 Google Veo 3.1 原生 SDK（google genai 1.x+）与 FFmpeg 的 AI 视频生成工作台。 为什么分段生成的视频总是“接不上” 单次文生视频往往只有几秒。如果直接拿第二段提示词重新生成，人物站位、光影色温和镜头运动方向都会重置，硬切在一起会有很强的割裂感。 在 veo flow 中，我把长视频生成拆成了三条可组合的帧级流水线： 1. 尾帧自动提取与续接（Frame to Frame Continuation） ：上一镜头生成完毕后，后端调用 FFmpeg 精确抽取最后一帧高清 PNG 作为下一镜头的起始参考帧（Initial Image），让光影、构图与主体材质自然延续。 2. 首尾帧关键帧插值（First Last Frame Interpolation） ：在已知转场起点与终点的场景下，同时传入首帧与尾帧约束镜头运动轨迹。 3. 原生视频延展（Native Video Extension） ：结合 Veo 3.1 原生延长接口，在保持运动惯性的前提下向后扩展时间轴。 自动配音与长文本切分流水线 只有画面没有旁白的视频在创作场景里依然是半成品。veo flow 在 routes/narration.py 中集成了双引擎旁白工作流： Gemini TTS ：支持 30 种音色与 70+ 语言，适合多语种解说； MiMo TTS ：针对中文长文本单次合成上限，自动按标点与语义边界切分段落，分段合成后再用 FFmpeg 无缝拼接并对齐视频轨道时长。 当旁白时长与视频画面时长不一致时，系统会自动计算音频轨与视频轨的差值，按配置选择留白淡出或智能对齐，避免台词被生硬截断。 生产级防呆：单 IP 任务锁与生成前成本预估 视频生成模型的单次调用成本远高于普通文本模型，而且一次生成往往需要数十秒到数分钟。如果不做并发限制和成本提示，页面刷新或连点两次按钮就意味着双倍账单。 为此我在 services/task manager.py 和路由层加了三道保护： 保护机制 实现位置 解决的问题 生成前费用预估 routes/generate.py 按所选模型（Veo 3.1 / Veo 3 / Imagen 4）、分辨率与秒数实时换算预估开销，确认后再下发请求 单 IP 并发任务锁 services/task manager.py 同一客户端存在未完成的长耗时任务时拒绝重复提交，并通过 SSE 推送当前任务进度 路径安全与 XFF 校验 services/file security.py 严格校验上传参考图的 MIME 与文件名，防止路径穿越与伪造 X Forwarded For 绕过锁机制 小结 把模型能力包装成 Demo 很容易，但要让它在日常创作中真正好用，核心往往在于 上下文衔接（尾帧提取与音画同步） 和 工程边界保护（任务锁、SSE 状态恢复与账单预估） 。完整源码与 OpenAPI 规范已开源在 suakitsu/veo flow。"
+  },
+  {
+    "title": "从 SuaCanvas 到 PicPilot：AI 电商创作工作台从 Spring Boot 到 Go 的架构演进",
+    "url": "/posts/suacanvas-to-picpilot.html",
+    "date": "2026-11-18",
+    "category": "项目记录",
+    "tags": [
+      "Go",
+      "Java",
+      "Next.js",
+      "架构重构",
+      "AI创作"
+    ],
+    "excerpt": "复盘 AI 电商商品套图与自由画布工作台的演进过程：为什么从 Java 17 + Spring Boot 3 迁移至 Go，以及如何基于同一套 core 核心拆分出多用户平台版（platform）与个人轻量版（personal）。",
+    "content": "在我的 GitHub 仓库里，有三个名字和定位看起来一脉相承的项目：suacanvas（素画）、picpilot platform 与 picpilot personal。它们并不是重复造轮子，而是同一个 AI 电商创作工作台在不同阶段的架构演进。 起点：SuaCanvas（素画）要解决什么问题 电商场景下的图片创作和纯艺术抽卡不同：商家上传一张商品白底图或实拍参考图后，需要的是一整套风格统一、商品主体不变形的 主图、场景图、卖点图、细节图乃至商品短视频 ，并且往往要在生成后进入无限画布（Infinite Canvas）里做局部微调与排版。 第一版 suacanvas 采用了我当时最熟悉的典型企业级技术栈： 后端 ：Java 17 + Spring Boot 3 + MyBatis Plus + PostgreSQL + Redis + MinIO/S3 前端 ：Next.js 14（用户创作台 openImage ts + 运营后台 openImage admin ts） 画布与扩展 ：集成 canvas lab 自由画布及桌面/移动端客户端 这套架构功能非常完整，但随着自部署需求的增加，痛点也逐渐暴露出来。 为什么要从 Spring Boot 重构到 Go 当我想在自己的轻量服务器或本地开发机上随时拉起一整套工作台时，Java 全家桶的启动内存开销、JVM 预热时间以及多组件容器编排显得有些笨重。尤其是对于 “只想自己连上 API Key 跑一个私人创作工作台” 的个人开发者来说，为了画几张图还要跑一套完整的计费、订单、风控和管理后台，负担太重了。 因此，在重构为 PicPilot 时，我做了两个核心架构决策： 1. 后端全面迁移至 Go ：将任务调度、模型厂商路由（Provider Routing）、对象存储适配与密钥加密存储重写为高内聚的 Go core/ 模块，编译为单一静态二进制，内存占用骤降且启动几乎是毫秒级。 2. 同源核心，双版本拆分（Platform vs. Personal） ：不再用一个庞大仓库硬塞所有模式，而是拆分为多用户平台版与个人自部署版。 维度 suacanvas（初代） picpilot platform（平台版） picpilot personal（个人版） 后端技术栈 Java 17 / Spring Boot 3 Go + PostgreSQL Go（轻量自包含） 前端界面 Next.js 用户端 + 管理后台 :8080 创作台 + :8081 运营后台 纯净个人创作台 + 自由画布 模型接入 平台统一网关与计费 多厂商动态路由、算力点数、充值风控 直连自有 API Key 或本地 127.0.0.1:8888/v1 适用人群 团队内部 / 私有化部署 多用户 SaaS / 团队共享运营 个人创作者 / 本地开箱即用 密钥安全与开源协议边界设计 在重构过程中，我还顺手解决了两个工程细节： 1. 实例级加密密钥存储 在 picpilot platform 中，模型厂商的 API Key 不会明文散落在环境变量或普通数据库字段里，而是通过实例级加密写入受保护的 instance secrets.json，配合后台动态增删渠道与权重路由。 2. MIT 与 AGPL 3.0 的清晰边界 PicPilot 的主工程代码（后端 core/、主控前端 web/）采用宽松的 MIT 许可证 ；而可选集成的 canvas lab/（基于 Nova Image Studio 与无限画布的深度改造）涉及 AGPL 3.0 组件。 通过在目录结构与构建开关上把主工作台与 canvas lab 解耦，既保证了完整组合发行的合规性，也让只需要核心生成管线的开发者可以安心在 MIT 协议下复用代码。 总结 从 suacanvas 到 picpilot platform 与 picpilot personal，最大的收获不是换了一门语言，而是想清楚了 “重度运营平台”与“个人趁手工具”的边界 。把公共的 AI 生成与路由能力沉淀在极简的 Go 核心层，向上既能撑起多租户计费平台，向下也能缩成一个纯粹的个人创作桌面。"
+  },
+  {
+    "title": "ProxyTunnel：自托管 EdgeTunnel 与 Mihomo 代理池的真实出口探测与端口隔离设计",
+    "url": "/posts/proxytunnel.html",
+    "date": "2026-11-15",
+    "category": "学习笔记",
+    "tags": [
+      "Go",
+      "PowerShell",
+      "Cloudflare",
+      "网络工具"
+    ],
+    "excerpt": "节点名称写着某个地区不代表真实出口就在哪里。记录 ProxyTunnel 如何结合 Cloudflare EdgeTunnel 数据面、Mihomo 隔离探测端口（:17891）与国家专享端口构建可验证、可回滚的局域网节点池。",
+    "content": "在日常开发、跨区 API 测试和多设备局域网共享场景中，维护单个代理节点往往很脆弱：候选源里的节点名称可能标着 US 或 JP，但实际拨号出去的落地 IP 却是另一个地区，甚至早已失效；而在客户端手动导入几十个节点逐个测速，又会让每台手机和电脑都陷入重复配置的泥潭。 ProxyTunnel 的目标很简单： 在一台主机上集中维护一组可验证、可轮换、可复用的节点池，并通过标准局域网端口、Clash YAML 与 v2rayN 订阅分发给所有可信设备。 整体架构：数据面、运行时与控制面分离 ProxyTunnel 没有重复造代理协议的轮子，而是将 Cloudflare 上的 EdgeTunnel 数据面、本机 Mihomo 代理运行时和 Go + PowerShell 运维控制台组合在一起： 各层职责划分非常克制： Go 后端（:9191，仅监听本地回环） ：负责候选目录分页检索、真实出口探测、历史快照与控制 API； Web 网关与控制台（:9190） ：对可信局域网提供仪表盘、自选池构建向导以及 Clash / v2rayN 订阅下载； Mihomo 多实例端口组 ：承担实际的流量转发与健康检查。 为什么必须用隔离探针（:17891）做真实出口验证 很多节点管理工具的“测速”只是做一次 TCP 握手或依赖节点名字里的国家标签。但在 EdgeTunnel + ProxyIP 体系下， 节点标签和真实出口经常不一致 。 如果在主代理端口（:7890）上直接切节点探测，会导致正在使用主池的业务请求瞬间断流或出口乱跳。因此，ProxyTunnel 专门拉起了一个 隔离探针实例（:17891，Controller :19091） ： 1. 候选节点先挂载到隔离探针 :17891； 2. Go 后端通过探针发起 Cloudflare Trace 请求，解析真实的 出口 IP、落地国家代码、Cloudflare 机房（Colo）和往返延迟 ； 3. 只有连续通过真实出口验证的节点，才会被准入到自选代理池（:7891）或分配到国家专用端口（:17901+）。 端口 角色定位 故障隔离策略 7890 Mihomo 主代理池 常驻稳定运行，不受后台批量探测与实验分组影响 7891 Mihomo 自选代理池 供局域网多设备共享；新池构建失败时自动回滚并保留上一版可用配置 17891 隔离探针入口 仅用于后台真实出口校验，不对业务暴露 17901+ 国家专用端口 为连续验证通过的指定国家节点分配独立入口，供固定地区业务调用 修复上游 EdgeTunnel 的跨请求全局状态污染 在集成上游 cmliu/edgetunnel（通过 Git Submodule 固定在可审计的 commit）时，我遇到了一个隐蔽的并发问题：上游代码在处理请求参数与拨号配置时存在模块级全局变量，高并发请求下不同连接可能会互相覆盖拨号目标。 为了既不破坏上游源码仓库、又能保证Worker并发安全，我在 cloudflare/scripts/build worker.mjs 中实现了一套 带唯一锚点校验的构建期补丁 ： 在构建阶段自动将请求级拨号上下文迁移到 Node/Workers 的 AsyncLocalStorage 中，彻底消除跨请求状态污染； 移除对远程第三方管理页的依赖，改用仓库内置且不接收 Cloudflare Global API Key 的安全 /login 与 /admin 页面； 如果上游代码更新导致补丁锚点失效，构建直接报错终止，绝不静默退回未修补状态。 零复制粘贴的启动体验 以前部署完 Worker 后，用户往往要去 KV 绑定页、环境变量页和管理后台之间来回复制 Namespace ID、UUID 和订阅地址。在 ProxyTunnel 中，整个流程被收敛到了两个脚本： ADMIN 管理密码仅在内存中用于派生凭据，不落盘、不进 Git；所有运行态快照全部隔离在 .gitignore 保护的 var/ 目录下。项目代码与架构文档见 suakitsu/proxytunnel。"
+  },
+  {
+    "title": "默认信任 A，审核回写 B：用 Go + Fyne 写一个克制的目录树同步工具 WayFileSync",
+    "url": "/posts/wayfilesync.html",
+    "date": "2026-11-12",
+    "category": "项目记录",
+    "tags": [
+      "Go",
+      "小工具",
+      "桌面开发"
+    ],
+    "excerpt": "通用同步工具功能强大，但在父子工作目录场景下很容易误覆盖。WayFileSync 把规则收敛为一件事：父目录 A 变更自动同步到 B，子目录 B 的修改必须先看 Unified Diff 审核后再回写。",
+    "content": "市面上并不缺文件同步工具：FreeFileSync、Syncthing、rsync 都很成熟。但在我自己的工作流里，经常遇到一种非对称的目录同步需求—— 主目录 A 是经过整理的基准仓库，派生工作目录 B（比如交给实验脚本、AI Agent 或外部工具处理的沙盒副本）需要时刻跟进 A 的更新，但 B 里面产生的修改绝不能未经检查就自动覆盖回 A。 如果用传统双向同步，一旦 B 里的脚本改坏了文件，错误会立刻污染基准目录 A；如果每次手动比对整个目录树，在多层级子目录下又极其繁琐。于是我用 Go 和 Fyne 写了 WayFileSync。 核心设计哲学：Default Trust A, Review B WayFileSync 故意砍掉了通用同步工具里复杂的双向冲突合并策略，只保留一条清晰的单向信任 + 审核回写规则： 1. 下行自动同步（A B） ：父节点 A 是受信任的基准源，A 中的新增与修改会自动同步到子节点 B； 2. 上行强制审核（B A） ：子节点 B 中发生的文件变更不会自动覆盖 A，而是进入待审核队列（Pending Review）； 3. Unified Diff 逐项确认 ：在 GUI 界面中直接查看文本文件的 Unified Diff 差异对比，确认无误后才回写到 A，或者一键用 A 重置 B。 树状同步拓扑与防环校验 除了单对 A B 目录外，有时一个基准目录会派生出多个子目录，甚至形成两层派生树（A B C）。WayFileSync 使用 sync tree.json 来维护目录树拓扑，并在添加节点时执行两项严格的静态安全检查： 环路检测（Cycle Prevention） ：禁止任何节点直接或间接将自己的祖先节点设为下游； 父子目录嵌套拦截（Containment Check） ：严禁将 C:\\Work\\Project 与它的子文件夹 C:\\Work\\Project\\sub 绑定为同步对，从根源上杜绝递归无限复制。 用 Go + Fyne 构建原生 Windows 桌面工具的体感 选择 Go + Fyne 来写这个桌面小工具，主要是看中了它的单文件分发能力： 通过 CGO + MinGW w64 编译后，产物就是一个独立的 Windows .exe 可执行文件，不依赖几十兆的 WebView2 或百兆以上的 Electron 运行时； 支持文件与文件夹直接拖拽（Drag & Drop）绑树、平级兄弟目录手动同步以及内置的差异高亮预览。 工具不一定越大越好。把一个高频痛点的交互收敛到“只做对一件事”，往往比配置一堆永远用不上的开关更让人安心。源码见 suakitsu/WayFileSync。"
+  },
+  {
+    "title": "给 Codex Desktop 加上沢渡雫桌宠与勿忘草皮肤：不碰安装包签名的本地 CDP 注入方案",
+    "url": "/posts/shizuku-codex-pet.html",
+    "date": "2026-11-09",
+    "category": "日常随想",
+    "tags": [
+      "创作",
+      "二次元",
+      "桌面美化",
+      "小工具"
+    ],
+    "excerpt": "为 Codex Desktop 制作三套十六向视线追踪的沢渡雫 v2 动画桌宠（全身版 / 像素版 / Q 版），并通过 127.0.0.1 本地回环 CDP 在不触碰 WindowsApps 与 app.asar 签名的前提下注入勿忘草主题皮肤。",
+    "content": "平时高频使用的开发工具，总希望能带一点自己喜欢的色彩。这个博客采用了清透的 Alice Blue（爱丽丝蓝） 主题，而我同样为日常使用的 Codex Desktop 制作了一套同色系的非官方、非商业同人扩展 —— shizuku codex pet，包含三套以《美少女万華鏡 忘れな草と永遠の少女 》 沢渡雫 为灵感的 v2 动画桌宠，以及配套的 Windows 勿忘草皮肤。 三套支持十六向注视的 Codex v2 动画桌宠 Codex Desktop 的 v2 桌宠系统支持丰富的状态机与鼠标视线追踪。为了让不同尺寸屏幕和审美偏好都能找到合适的陪伴感，我制作了三种不同画风的版本： 文件夹标识 风格版本 特点说明 shizuku 全身表现版 完整呈现角色服饰与神态细节，动作过渡细腻 shizuku pixel 复古像素版 颗粒感清晰的像素风格，适合搭配极客向代码编辑器 shizuku q 可爱 Q 版 二头身比例，占用桌面视觉面积小，轻巧不挡代码 三套桌宠均包含 Codex v2 标准动作集与 顺时针十六向注视（16 direction clockwise gaze） 。安装时只需将对应的文件夹放入 %USERPROFILE%\\.codex\\pets\\（或 %CODEX HOME%\\pets\\），保持每个目录内的 pet.json 动作定义与 spritesheet.webp 精灵图成对即可： 为什么不用解包 app.asar 的方式改皮肤 在给 Windows 桌面端（尤其是通过 Microsoft Store 安装的 Codex 应用）换肤时，最常见但风险最高的做法是强行获取 WindowsApps 目录权限、解包修改 app.asar 再重新打包。这样做有三个很大的弊端： 1. 破坏应用数字签名 ：容易导致 Windows 应用无法启动或更新失败； 2. 升级即失效 ：每次官方客户端小版本更新都要重新解包替换； 3. 透明层冲突 ：全局 CSS 覆盖很容易把 /avatar overlay 桌宠悬浮窗背景也涂成不透明色块，导致桌宠变成“顶着一块背景板”。 基于本地回环（127.0.0.1）的无侵入皮肤注入 受 Fei Away/Codex Dream Skin 思路启发，shizuku codex pet 的勿忘草皮肤采用了 纯本地回环 CDP（Chrome DevTools Protocol）样式注入 方案： 零文件篡改 ：完全不触碰 WindowsApps 安装目录与 app.asar，不破坏任何官方签名，也不读取用户的 API Key 或聊天记录； 桌宠图层友好 ：专门识别并跳过 /avatar overlay 桌宠透明窗口，确保勿忘草浅蓝毛玻璃主界面与透明悬浮桌宠完美共存； 一键恢复与校验 ：在 Releases 中分别提供了桌宠包（v1.0.0）与皮肤包（skin v1.0.0），附带独立的安装/恢复脚本与 .sha256 完整性校验文件。 这是一个纯粹出于喜爱的非商业同人小作品（相关角色权利归原作权利方所有）。希望这抹勿忘草蓝也能让写代码的过程多一点轻松的心情。项目地址：suakitsu/shizuku codex pet。"
+  }
+]
