@@ -633,6 +633,8 @@
         artboard.style.width = `${Math.round(r.width)}px`;
         artboard.style.height = `${Math.round(r.height)}px`;
       };
+      window.addEventListener('scroll', syncArtboardOnScroll, { passive: true });
+      this.scrollSyncCleanup = () => window.removeEventListener('scroll', syncArtboardOnScroll);
 
       const buildArtboardTask = async (leadAgent) => {
         leadAgent.busy = true;
@@ -1177,16 +1179,118 @@
     const dialog = document.getElementById('searchModal');
     const input = document.getElementById('searchInput');
     const results = document.getElementById('searchResults');
-    const showSearch = () => { SwarmIntroManager.cleanup(true); setMenu(false); dialog.showModal(); input.focus(); };
+    let searchIndex = null;
+    let searchLoading = null;
+
+    const loadSearchIndex = async () => {
+      if (Array.isArray(searchIndex)) return searchIndex;
+      if (searchLoading) return searchLoading;
+      searchLoading = fetch('/search.json', { credentials: 'omit' })
+        .then(r => (r.ok ? r.json() : []))
+        .then(data => {
+          searchIndex = Array.isArray(data) ? data : [];
+          return searchIndex;
+        })
+        .catch(() => {
+          searchIndex = [];
+          return searchIndex;
+        });
+      return searchLoading;
+    };
+
+    const renderSearchResults = async () => {
+      const query = input.value.trim().toLowerCase();
+      const posts = await loadSearchIndex();
+      results.innerHTML = '';
+
+      if (posts.length === 0) {
+        results.classList.add('search-hint');
+        results.textContent = query
+          ? '还没有发布文章，暂时没有搜索结果。'
+          : '还没有文章，发布后就能在这里搜索。';
+        return;
+      }
+
+      if (!query) {
+        results.classList.add('search-hint');
+        results.textContent = `共 ${posts.length} 篇文章，输入关键词开始搜索...`;
+        return;
+      }
+
+      const matched = posts.filter(item => {
+        const haystack = [
+          item.title,
+          item.excerpt,
+          item.category,
+          Array.isArray(item.tags) ? item.tags.join(' ') : item.tags,
+          item.content
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(query);
+      });
+
+      if (matched.length === 0) {
+        results.classList.add('search-hint');
+        results.textContent = '未找到匹配的文章，换个关键词试试。';
+        return;
+      }
+
+      results.classList.remove('search-hint');
+      const frag = document.createDocumentFragment();
+      matched.slice(0, 20).forEach(post => {
+        const link = document.createElement('a');
+        link.className = 'search-result-item';
+        link.href = post.url || '/';
+
+        const titleEl = document.createElement('div');
+        titleEl.className = 'search-result-title';
+        titleEl.textContent = post.title || '无标题文章';
+        link.appendChild(titleEl);
+
+        if (post.excerpt) {
+          const excerptEl = document.createElement('div');
+          excerptEl.className = 'search-result-excerpt';
+          excerptEl.textContent = post.excerpt;
+          link.appendChild(excerptEl);
+        }
+
+        const metaEl = document.createElement('div');
+        metaEl.className = 'search-result-meta';
+        if (post.date) {
+          const dateSpan = document.createElement('span');
+          dateSpan.textContent = post.date;
+          metaEl.appendChild(dateSpan);
+        }
+        if (post.category) {
+          const catSpan = document.createElement('span');
+          catSpan.textContent = post.category;
+          metaEl.appendChild(catSpan);
+        }
+        if (metaEl.childNodes.length > 0) {
+          link.appendChild(metaEl);
+        }
+
+        frag.appendChild(link);
+      });
+      results.appendChild(frag);
+    };
+
+    const showSearch = () => {
+      SwarmIntroManager.cleanup(true);
+      setMenu(false);
+      dialog.showModal();
+      input.focus();
+      renderSearchResults();
+    };
     document.getElementById('searchToggle').addEventListener('click', showSearch);
     document.getElementById('searchClose').addEventListener('click', () => dialog.close());
     document.getElementById('searchOverlay').addEventListener('click', () => dialog.close());
-    input.addEventListener('input', () => {
-      results.textContent = input.value.trim() ? '还没有发布文章，暂时没有搜索结果。' : '还没有文章，发布后就能在这里搜索。';
-    });
+    input.addEventListener('input', renderSearchResults);
     dialog.addEventListener('close', () => {
       input.value = '';
-      results.textContent = '还没有文章，发布后就能在这里搜索。';
+      renderSearchResults();
     });
     document.addEventListener('keydown', e => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); showSearch(); }
@@ -1208,7 +1312,6 @@
     };
     reduceMotion.addEventListener('change', syncMotion);
     syncMotion();
-    document.querySelectorAll('.bento-tech .tech-pill').forEach(el => el.setAttribute('tabindex', '-1'));
   }
   document.addEventListener('DOMContentLoaded', () => {
     initControls();

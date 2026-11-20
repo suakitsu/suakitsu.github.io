@@ -2,12 +2,6 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#f0f8ff"><title>标签 · suakitsu</title><meta name="description" content="suakitsu 的个人博客，记录想法、项目与日常。"><link rel="canonical" href="https://suakitsu.github.io/tags.html"><link rel="icon" href="/favicon.png" type="image/png"><meta property="og:title" content="标签 · suakitsu"><meta property="og:description" content="记录想法、项目与日常。"><meta property="og:url" content="https://suakitsu.github.io/tags.html"><meta property="og:type" content="website"><meta property="og:image" content="https://suakitsu.github.io/avatar.png"><script>(() => { try {
   const saved = localStorage.getItem('suakitsu-theme');
   document.documentElement.dataset.theme = saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  const home = location.pathname === '/' || location.pathname === '/index.html';
-  const force = new URLSearchParams(location.search).get('intro') === '1';
-  if (home && !matchMedia('(prefers-reduced-motion: reduce)').matches && (!localStorage.getItem('suakitsu_intro_seen_v1') || force)) {
-    document.documentElement.classList.add('swarm-intro-preparing');
-    setTimeout(() => document.documentElement.classList.remove('swarm-intro-preparing'), 3500);
-  }
 } catch {} })();</script><link rel="stylesheet" href="/style.css"><script src="/main.js" defer></script></head>
 <body><div id="pageStart" aria-hidden="true" style="height:1px;position:absolute;top:0"></div><div class="skip-links"><a href="#main">跳到主要内容</a></div><nav class="navbar" id="site-nav" aria-label="主导航">
   <div class="container">
@@ -56,7 +50,7 @@
 <div class="mobile-menu" id="mobileMenu">
   <a href="/" class="mobile-link">首页</a>
   <a href="/categories.html" class="mobile-link">分类</a>
-  <a href="/tags.html" class="mobile-link">标签</a>
+  <a href="/tags.html" class="mobile-link active" aria-current="page">标签</a>
   <a href="/year-archive.html" class="mobile-link">归档</a>
   <a href="/about.html" class="mobile-link">关于</a>
   <a href="https://github.com/suakitsu" target="_blank" rel="noopener" class="mobile-link">GitHub</a>
