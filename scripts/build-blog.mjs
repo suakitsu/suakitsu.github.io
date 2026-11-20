@@ -345,6 +345,15 @@ function build() {
 
   const statsText = `${posts.length} 篇文章 · ${categoriesMap.size} 个分类`;
 
+  // Clean old generated .html files in posts/ before regenerating
+  if (fs.existsSync(POSTS_DIR)) {
+    for (const file of fs.readdirSync(POSTS_DIR)) {
+      if (file.endsWith('.html')) {
+        fs.unlinkSync(path.join(POSTS_DIR, file));
+      }
+    }
+  }
+
   // 1. Generate individual post HTML files
   for (let idx = 0; idx < posts.length; idx++) {
     const post = posts[idx];
