@@ -1834,8 +1834,8 @@ img {
   transition: all 0.25s var(--smooth);
   backdrop-filter: blur(10px);
   z-index: 10;
-  opacity: 0;
-  transform: translateY(-4px);
+  opacity: 0.9;
+  transform: none;
 }
 
 .code-block-wrapper:hover .code-copy-btn {
@@ -4189,8 +4189,7 @@ dialog.search-modal[open] {
 /* 按钮涟漪效果 */
 .hero-link,
 .pagination-btn,
-.share-link,
-.code-copy-btn {
+.share-link {
   position: relative;
   overflow: hidden;
 }

@@ -18,7 +18,7 @@ excerpt: 为什么在有了 FreeFileSync 和 Syncthing 之后还要自己写一�
 
 ## 一、为什么通用同步工具在这个场景下“太重又太危险”
 
-FreeFileSync 和 Syncthing 都是非常优秀的开源软件，它们也给了我很多启发：FreeFileSync 的“对比 $\rightarrow$ 预览 $\rightarrow$ 确认”流程非常清晰，而 Syncthing 的 `fsnotify` 实时目录监听与多节点拓扑很实用。
+FreeFileSync 和 Syncthing 都是非常优秀的开源软件，它们也给了我很多启发：FreeFileSync 的“对比 → 预览 → 确认”流程非常清晰，而 Syncthing 的 `fsnotify` 实时目录监听与多节点拓扑很实用。
 
 但问题在于：**通用同步工具默认把两边当作地位对等的节点（Peer-to-Peer）或纯粹的单向镜像（Mirror）**。
 
@@ -185,10 +185,10 @@ func (c *Controller) RunInternal(fn func() error) error {
 
 | 变更状态 | 标识 | 触发条件 | 回写父目录时的安全动作 |
 | --- | --- | --- | --- |
-| **新增** | `A` (Added) | 子目录存在、父目录不存在 | 检查目标路径 $\rightarrow$ 拷贝新文件 $\rightarrow$ 更新节点索引 |
-| **修改** | `M` (Modified) | 双方均存在但大小或修改时间/内容不同 | **自动备份父目录原文件** $\rightarrow$ 覆盖写入 $\rightarrow$ 支持一键回滚 |
-| **删除** | `D` (Deleted) | 父目录存在、子目录已删除 | **自动备份父目录原文件** $\rightarrow$ 执行删除 $\rightarrow$ 更新节点索引 |
-| **重命名** | `R` (Renamed) | 唯一匹配 `size:modTime` 签名的删增对 | **备份新旧路径** $\rightarrow$ 执行 `os.Rename` 与内容同步 |
+| **新增** | `A` (Added) | 子目录存在、父目录不存在 | 检查目标路径 → 拷贝新文件 → 更新节点索引 |
+| **修改** | `M` (Modified) | 双方均存在但大小或修改时间/内容不同 | **自动备份父目录原文件** → 覆盖写入 → 支持一键回滚 |
+| **删除** | `D` (Deleted) | 父目录存在、子目录已删除 | **自动备份父目录原文件** → 执行删除 → 更新节点索引 |
+| **重命名** | `R` (Renamed) | 唯一匹配 `size:modTime` 签名的删增对 | **备份新旧路径** → 执行 `os.Rename` 与内容同步 |
 
 ## 三、交互打磨与 Windows 单文件打包
 

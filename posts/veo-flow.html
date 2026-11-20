@@ -169,7 +169,7 @@ except AttributeError:
 <p>除了尾帧续接，<code>veo-flow</code> 还封装了 <code>source.video = types.Video.from_file(...)</code> 原生视频延长接口，以及支持最多 4 张参考图（<code>reference_images</code>）的角色一致性输入，方便在多镜头 Storyboard 分镜模式下保持同一角色的外观特征。</p>
 <h2 id="section-6">三、双模式配音（Narration）与多说话人 TTS 合成</h2>
 <p>很多短视频创作者不仅需要纯画面，还需要“<strong>输入一个主题，直接产出带配音解说的成片</strong>”。<code>routes/narration.py</code> 为此设计了两条工作流：</p>
-<ul><li><strong>Auto 自动成片模式</strong>：输入主题（Topic） $\rightarrow$ Gemini 自动撰写分镜解说词与生图 Prompt $\rightarrow$ 调用 Imagen 4 批量生成高清配图 $\rightarrow$ TTS 语音合成 $\rightarrow$ FFmpeg 自动对齐音画时长并合成为完整 MP4。</li><li><strong>Manual 手动精调模式</strong>：用户上传自己准备好的多张图片或视频片段，输入旁白台词并挑选音色与语气风格。</li></ul>
+<ul><li><strong>Auto 自动成片模式</strong>：输入主题（Topic）→ Gemini 自动撰写分镜解说词与生图 Prompt → 调用 Imagen 4 批量生成高清配图 → TTS 语音合成 → FFmpeg 自动对齐音画时长并合成为完整 MP4。</li><li><strong>Manual 手动精调模式</strong>：用户上传自己准备好的多张图片或视频片段，输入旁白台词并挑选音色与语气风格。</li></ul>
 <p>在 TTS 引擎层，<code>veo-flow</code> 做了三级适配与自动降级：</p>
 <table><thead><tr><th>引擎标识</th><th>核心优势</th><th>适用场景与技术细节</th></tr></thead><tbody><tr><td><strong>Gemini TTS</strong> (<code>_tts_gemini</code>)</td><td>30 种预置音色（Kore / Puck / Aoede / Zephyr 等）、70+ 语言、支持内联语气控制（如 <code>[whispers]</code>）与双人播客对话</td><td>使用 <code>response_modalities=[&quot;AUDIO&quot;]</code> 与 <code>MultiSpeakerVoiceConfig</code> 原生输出音频字节流</td></tr><tr><td><strong>MiMo TTS</strong> (<code>_tts_openai</code>)</td><td>中文发音自然，国内网络直连无需代理</td><td>针对单次请求 ~40–50 字的限制，在服务端自动按标点分句合成后再无缝拼接</td></tr><tr><td><strong>gTTS</strong> (<code>_tts_gtts</code>)</td><td>零密钥开销</td><td>当云端 TTS 额度耗尽或网络异常时作为自动 Fallback 兜底，保证合成流程不中断</td></tr></tbody></table>
 <p>其中，Gemini 多说话人播客配音（<code>_tts_gemini_multi</code>）可以把一段包含 <code>Host:</code> 与 <code>Guest:</code> 的对话文本一次性映射给不同的预置音色：</p>
@@ -200,7 +200,7 @@ response = call_with_retry(
 <p>在把 <code>veo-flow</code> 部署给团队或日常高频使用时，<strong>防误触扣费</strong>和<strong>服务重启后的状态一致性</strong>比花哨的 UI 更重要。</p>
 <h3 id="section-8">1. 按秒精确核算的生成前成本预估</h3>
 <p>云端视频模型是按生成的视频秒数（Per Second）计费的。以 8 秒视频为例：</p>
-<table><thead><tr><th>模型版本</th><th>每秒单价</th><th>8 秒单次成本</th><th>适用阶段</th></tr></thead><tbody><tr><td><strong>Veo 3.1</strong></td><td>\$0.40 / sec</td><td>\$3.20</td><td>最终 4K + 原生音效高品质成片</td></tr><tr><td><strong>Veo 3.1 Fast</strong></td><td>\$0.15 / sec</td><td>\$1.20</td><td>日常主力生成，性价比最高</td></tr><tr><td><strong>Veo 3.1 Lite</strong></td><td>\$0.05 / sec</td><td>\$0.40</td><td>走位测试、Prompt 快速迭代验证</td></tr><tr><td><strong>Imagen 4 Ultra / Fast</strong></td><td>\$0.06 / \$0.02</td><td>按张计费</td><td>分镜首帧与参考底图生成</td></tr></tbody></table>
+<table><thead><tr><th>模型版本</th><th>每秒单价</th><th>8 秒单次成本</th><th>适用阶段</th></tr></thead><tbody><tr><td><strong>Veo 3.1</strong></td><td>$0.40 / sec</td><td>$3.20</td><td>最终 4K + 原生音效高品质成片</td></tr><tr><td><strong>Veo 3.1 Fast</strong></td><td>$0.15 / sec</td><td>$1.20</td><td>日常主力生成，性价比最高</td></tr><tr><td><strong>Veo 3.1 Lite</strong></td><td>$0.05 / sec</td><td>$0.40</td><td>走位测试、Prompt 快速迭代验证</td></tr><tr><td><strong>Imagen 4 Ultra / Fast</strong></td><td>$0.06 / $0.02</td><td>按张计费</td><td>分镜首帧与参考底图生成</td></tr></tbody></table>
 <p>在前端点击生成按钮前，系统会先根据所选模型、分段数、总时长以及是否关闭原生音频（关闭可节省约 33% 成本）弹出精确的美元预估确认框；任务启动后，<code>history_manager.py</code> 会在后台线程安全地记录每一笔任务的真实耗时与累计花费，并在 Dashboard 面板可视化展示成功率与开销曲线。</p>
 <h3 id="section-9">2. 单 IP 并发任务锁与持久化状态机（<code>task_manager.py</code>）</h3>
 <p>一旦云端生成操作（Operation）创建成功，即使关掉浏览器标签页，Google 云端依然会继续渲染并扣费。为了防止用户在等待期间重复提交，<code>services/task_manager.py</code> 实现了基于真实 IP 的并发锁与磁盘持久化状态机：</p>
